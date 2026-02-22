@@ -1,5 +1,6 @@
 pub mod adapter;
 pub mod error;
+pub mod router;
 pub mod types;
 
 pub use adapter::Adapter;
