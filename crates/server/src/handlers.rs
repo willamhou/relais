@@ -120,6 +120,29 @@ pub async fn exec_action(
             })
     });
 
+    // If the token is expired, try to refresh it automatically.
+    let credentials = if let Some(cred) = credentials {
+        if cred.is_expired() {
+            match relais_core::token_refresh::maybe_refresh(
+                &cred,
+                &body.site,
+                state.vault.as_ref(),
+            )
+            .await
+            {
+                Ok(refreshed) => Some(refreshed),
+                Err(e) => {
+                    tracing::warn!("token refresh failed for {}: {}", body.site, e);
+                    Some(cred)
+                }
+            }
+        } else {
+            Some(cred)
+        }
+    } else {
+        None
+    };
+
     let ctx = ExecContext {
         site: body.site,
         resource: body.resource,

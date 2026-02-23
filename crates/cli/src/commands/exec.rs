@@ -20,18 +20,33 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
 
     // Try to retrieve stored credentials from the vault.
     // If the vault is unavailable or no credential is found, proceed without credentials.
-    let credentials = match open_vault() {
-        Ok(vault) => match vault.retrieve(site_id) {
-            Ok(Some(json_str)) => match serde_json::from_str::<Credentials>(&json_str) {
-                Ok(creds) => Some(creds),
-                Err(_) => {
-                    // Legacy plain token format — wrap as ApiKey for backward compat
-                    Some(Credentials::api_key(&json_str))
+    let vault = open_vault().ok();
+    let credentials = vault.as_ref().and_then(|v| {
+        v.retrieve(site_id)
+            .ok()
+            .flatten()
+            .and_then(|json_str| {
+                serde_json::from_str::<Credentials>(&json_str)
+                    .ok()
+                    .or_else(|| Some(Credentials::api_key(&json_str)))
+            })
+    });
+
+    // If the token is expired, try to refresh it automatically.
+    let credentials = if let Some(cred) = credentials {
+        if cred.is_expired() {
+            match relais_core::token_refresh::maybe_refresh(&cred, site_id, vault.as_ref()).await {
+                Ok(refreshed) => Some(refreshed),
+                Err(e) => {
+                    tracing::warn!("token refresh failed for {}: {}", site_id, e);
+                    Some(cred)
                 }
-            },
-            _ => None,
-        },
-        Err(_) => None,
+            }
+        } else {
+            Some(cred)
+        }
+    } else {
+        None
     };
 
     let router = build_router();
