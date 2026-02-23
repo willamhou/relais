@@ -2155,6 +2155,7 @@ dependencies = [
 name = "relais-llm-fallback"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chromiumoxide",
  "relais-core",

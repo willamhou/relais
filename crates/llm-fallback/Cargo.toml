@@ -14,3 +14,7 @@ reqwest.workspace = true
 chromiumoxide = { version = "0.7", features = ["tokio-runtime"] }
 tracing.workspace = true
 thiserror.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
