@@ -49,6 +49,17 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
         None
     };
 
+    // Warn if cookie credentials are stale.
+    if let Some(ref cred) = credentials {
+        if cred.is_cookie_stale(24) {
+            tracing::warn!(
+                "cookies for {} are older than 24 hours, consider re-authenticating \
+                 with 'relais auth import-cookies'",
+                site_id
+            );
+        }
+    }
+
     let router = build_router();
     let adapter = router
         .get(site_id)

@@ -159,4 +159,32 @@ impl Credentials {
             _ => false,
         }
     }
+
+    /// Check if cookie credentials are stale (older than `max_age_hours`).
+    ///
+    /// Returns `true` when:
+    /// - The explicit `expires_at` timestamp is in the past, **or**
+    /// - The cookie was captured more than `max_age_hours` ago.
+    ///
+    /// For non-cookie credentials this always returns `false`.
+    pub fn is_cookie_stale(&self, max_age_hours: i64) -> bool {
+        match &self.data {
+            CredentialData::Cookie {
+                captured_at,
+                expires_at,
+                ..
+            } => {
+                // Check explicit expiry first.
+                if let Some(exp) = expires_at {
+                    if *exp < Utc::now() {
+                        return true;
+                    }
+                }
+                // Check staleness by capture time.
+                let age = Utc::now() - *captured_at;
+                age.num_hours() >= max_age_hours
+            }
+            _ => false,
+        }
+    }
 }

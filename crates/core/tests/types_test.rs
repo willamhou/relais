@@ -102,3 +102,104 @@ fn credentials_cookie_has_no_bearer() {
     };
     assert_eq!(cred.bearer_token(), None);
 }
+
+#[test]
+fn cookie_not_stale_when_fresh() {
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc".into());
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: chrono::Utc::now(),
+            expires_at: None,
+        },
+    };
+    assert!(!cred.is_cookie_stale(24));
+}
+
+#[test]
+fn cookie_stale_when_old() {
+    use chrono::{Duration, Utc};
+
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc".into());
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: Utc::now() - Duration::hours(25),
+            expires_at: None,
+        },
+    };
+    assert!(cred.is_cookie_stale(24));
+}
+
+#[test]
+fn cookie_stale_when_expired() {
+    use chrono::{Duration, Utc};
+
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc".into());
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: Utc::now(),
+            expires_at: Some(Utc::now() - Duration::hours(1)),
+        },
+    };
+    assert!(cred.is_cookie_stale(24));
+}
+
+#[test]
+fn api_key_is_never_stale() {
+    let cred = Credentials::api_key("token");
+    assert!(!cred.is_cookie_stale(24));
+}
+
+#[test]
+fn oauth_is_never_cookie_stale() {
+    let cred = Credentials::oauth("access_abc", None, None);
+    assert!(!cred.is_cookie_stale(24));
+}
+
+#[test]
+fn cookie_not_stale_when_within_max_age() {
+    use chrono::{Duration, Utc};
+
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc".into());
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: Utc::now() - Duration::hours(23),
+            expires_at: None,
+        },
+    };
+    assert!(!cred.is_cookie_stale(24));
+}
+
+#[test]
+fn cookie_not_stale_when_explicit_expiry_in_future() {
+    use chrono::{Duration, Utc};
+
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc".into());
+    // Captured long ago but explicit expiry is in the future and capture age < max_age
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: Utc::now(),
+            expires_at: Some(Utc::now() + Duration::hours(48)),
+        },
+    };
+    assert!(!cred.is_cookie_stale(24));
+}

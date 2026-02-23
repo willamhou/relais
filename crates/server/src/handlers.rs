@@ -143,6 +143,17 @@ pub async fn exec_action(
         None
     };
 
+    // Warn if cookie credentials are stale.
+    if let Some(ref cred) = credentials {
+        if cred.is_cookie_stale(24) {
+            tracing::warn!(
+                "cookies for {} are older than 24 hours, consider re-authenticating \
+                 with 'relais auth import-cookies'",
+                body.site
+            );
+        }
+    }
+
     let ctx = ExecContext {
         site: body.site,
         resource: body.resource,

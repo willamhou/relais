@@ -4,8 +4,8 @@ pub mod providers;
 
 use async_trait::async_trait;
 use relais_core::{
-    Action, Adapter, AdapterError, AuthType, ExecContext, Method, Resource, Response, ResponseMeta,
-    SiteManifest,
+    Action, Adapter, AdapterError, AuthType, CredentialData, ExecContext, Method, Resource,
+    Response, ResponseMeta, SiteManifest,
 };
 use serde_json::json;
 use tracing::debug;
@@ -126,7 +126,13 @@ impl Adapter for LlmFallbackAdapter {
 
                 debug!(url, action, "LLM fallback: fetching and extracting");
 
-                let html = fetch_html(url).await.map_err(|e| {
+                // Extract cookies from credentials if present.
+                let cookies = ctx.credentials.as_ref().and_then(|cred| match &cred.data {
+                    CredentialData::Cookie { cookies, .. } => Some(cookies),
+                    _ => None,
+                });
+
+                let html = fetch_html(url, cookies).await.map_err(|e| {
                     AdapterError::Other(anyhow::anyhow!("failed to fetch HTML: {e}"))
                 })?;
 
