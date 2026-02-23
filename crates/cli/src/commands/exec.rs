@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
-use relais_core::types::ExecContext;
+use relais_core::types::{Credentials, ExecContext};
 use serde_json::Value;
 
-use super::build_router;
+use super::{build_router, open_vault};
 
 pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
     let parts: Vec<&str> = path.splitn(3, '.').collect();
@@ -18,6 +18,22 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
         None => Value::Object(serde_json::Map::new()),
     };
 
+    // Try to retrieve stored credentials from the vault.
+    // If the vault is unavailable or no credential is found, proceed without credentials.
+    let credentials = match open_vault() {
+        Ok(vault) => match vault.retrieve(site_id) {
+            Ok(Some(json_str)) => match serde_json::from_str::<Credentials>(&json_str) {
+                Ok(creds) => Some(creds),
+                Err(_) => {
+                    // Legacy plain token format — wrap as ApiKey for backward compat
+                    Some(Credentials::api_key(&json_str))
+                }
+            },
+            _ => None,
+        },
+        Err(_) => None,
+    };
+
     let router = build_router();
     let adapter = router
         .get(site_id)
@@ -28,7 +44,7 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
         resource: resource_id.to_string(),
         action: action_id.to_string(),
         params,
-        credentials: None,
+        credentials,
     };
 
     let response = adapter.exec(&ctx).await?;
