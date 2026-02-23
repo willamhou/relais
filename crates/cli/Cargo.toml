@@ -28,3 +28,7 @@ reqwest.workspace = true
 anyhow.workspace = true
 dirs = "5"
 axum = "0.8"
+open = "5"
+urlencoding = "2"
+rand = "0.8"
+chrono.workspace = true

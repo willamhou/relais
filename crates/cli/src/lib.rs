@@ -45,6 +45,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: VaultAction,
     },
+    /// Authenticate with a site via OAuth or cookie import
+    Auth {
+        #[command(subcommand)]
+        action: AuthAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -62,5 +67,46 @@ pub enum VaultAction {
     Delete {
         /// Site ID to delete
         site: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AuthAction {
+    /// OAuth login for a known provider (e.g., github)
+    Login {
+        /// Provider name (e.g., "github")
+        provider: String,
+    },
+    /// Custom OAuth login with explicit parameters
+    Custom {
+        /// OAuth authorization URL
+        #[arg(long)]
+        auth_url: String,
+        /// OAuth token URL
+        #[arg(long)]
+        token_url: String,
+        /// Client ID
+        #[arg(long)]
+        client_id: String,
+        /// Client secret
+        #[arg(long)]
+        client_secret: String,
+        /// Site ID to store credential under
+        #[arg(long)]
+        site: String,
+        /// Scopes (comma-separated)
+        #[arg(long, default_value = "")]
+        scopes: String,
+    },
+    /// Import cookies from browser (manual)
+    ImportCookies {
+        /// Site ID
+        site: String,
+        /// Domain the cookies belong to
+        #[arg(long)]
+        domain: String,
+        /// Cookie string (name=value pairs, semicolon-separated)
+        #[arg(long)]
+        cookies: String,
     },
 }

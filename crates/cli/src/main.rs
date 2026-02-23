@@ -22,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
             relais_cli::commands::serve::run(port, jwt_secret).await?;
         }
         Commands::Vault { action } => relais_cli::commands::vault::run(&action)?,
+        Commands::Auth { action } => relais_cli::commands::auth::run(action).await?,
     }
 
     Ok(())

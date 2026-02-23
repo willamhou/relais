@@ -1,5 +1,5 @@
 use clap::Parser;
-use relais_cli::{Cli, Commands, VaultAction};
+use relais_cli::{AuthAction, Cli, Commands, VaultAction};
 
 #[test]
 fn cli_parses_sites_command() {
@@ -115,5 +115,118 @@ fn cli_parses_vault_delete() {
             _ => panic!("expected Delete action"),
         },
         _ => panic!("expected Vault command"),
+    }
+}
+
+#[test]
+fn cli_parses_auth_login() {
+    let cli = Cli::parse_from(["relais", "auth", "login", "github"]);
+    match cli.command {
+        Commands::Auth { action } => match action {
+            AuthAction::Login { provider } => {
+                assert_eq!(provider, "github");
+            }
+            _ => panic!("expected Login action"),
+        },
+        _ => panic!("expected Auth command"),
+    }
+}
+
+#[test]
+fn cli_parses_auth_custom() {
+    let cli = Cli::parse_from([
+        "relais",
+        "auth",
+        "custom",
+        "--auth-url",
+        "https://example.com/auth",
+        "--token-url",
+        "https://example.com/token",
+        "--client-id",
+        "myid",
+        "--client-secret",
+        "mysecret",
+        "--site",
+        "example",
+    ]);
+    match cli.command {
+        Commands::Auth { action } => match action {
+            AuthAction::Custom {
+                auth_url,
+                token_url,
+                client_id,
+                client_secret,
+                site,
+                scopes,
+            } => {
+                assert_eq!(auth_url, "https://example.com/auth");
+                assert_eq!(token_url, "https://example.com/token");
+                assert_eq!(client_id, "myid");
+                assert_eq!(client_secret, "mysecret");
+                assert_eq!(site, "example");
+                assert_eq!(scopes, "");
+            }
+            _ => panic!("expected Custom action"),
+        },
+        _ => panic!("expected Auth command"),
+    }
+}
+
+#[test]
+fn cli_parses_auth_custom_with_scopes() {
+    let cli = Cli::parse_from([
+        "relais",
+        "auth",
+        "custom",
+        "--auth-url",
+        "https://example.com/auth",
+        "--token-url",
+        "https://example.com/token",
+        "--client-id",
+        "myid",
+        "--client-secret",
+        "mysecret",
+        "--site",
+        "example",
+        "--scopes",
+        "read,write,admin",
+    ]);
+    match cli.command {
+        Commands::Auth { action } => match action {
+            AuthAction::Custom { scopes, .. } => {
+                assert_eq!(scopes, "read,write,admin");
+            }
+            _ => panic!("expected Custom action"),
+        },
+        _ => panic!("expected Auth command"),
+    }
+}
+
+#[test]
+fn cli_parses_auth_import_cookies() {
+    let cli = Cli::parse_from([
+        "relais",
+        "auth",
+        "import-cookies",
+        "example",
+        "--domain",
+        "example.com",
+        "--cookies",
+        "session=abc; token=xyz",
+    ]);
+    match cli.command {
+        Commands::Auth { action } => match action {
+            AuthAction::ImportCookies {
+                site,
+                domain,
+                cookies,
+            } => {
+                assert_eq!(site, "example");
+                assert_eq!(domain, "example.com");
+                assert_eq!(cookies, "session=abc; token=xyz");
+            }
+            _ => panic!("expected ImportCookies action"),
+        },
+        _ => panic!("expected Auth command"),
     }
 }

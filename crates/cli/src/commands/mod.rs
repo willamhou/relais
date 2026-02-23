@@ -1,4 +1,5 @@
 pub mod apis;
+pub mod auth;
 pub mod exec;
 pub mod serve;
 pub mod sites;
