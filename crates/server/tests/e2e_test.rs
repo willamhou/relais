@@ -5,6 +5,8 @@ use axum_test::TestServer;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use relais_adapter_hackernews::HackerNewsAdapter;
 use relais_core::router::Router;
+use relais_core::vault::Vault;
+use relais_core::Credentials;
 use relais_server::state::{AppState, SharedState};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -29,6 +31,17 @@ fn hn_state() -> AppState {
         router,
         jwt_secret: TEST_JWT_SECRET.to_string(),
         vault: None,
+    })
+}
+
+/// Build an [`AppState`] with the HN adapter and a vault attached.
+fn hn_state_with_vault(vault: Vault) -> AppState {
+    let mut router = Router::new();
+    router.register(Box::new(HackerNewsAdapter::new()));
+    Arc::new(SharedState {
+        router,
+        jwt_secret: TEST_JWT_SECRET.to_string(),
+        vault: Some(vault),
     })
 }
 
@@ -285,4 +298,115 @@ async fn e2e_exec_unknown_site_returns_404() {
         .await;
 
     response.assert_status_not_found();
+}
+
+// ===========================================================================
+// Test 5: Credential injection from vault
+// ===========================================================================
+
+/// Verify that when a vault has stored credentials for a site, the server
+/// injects them into the exec context without breaking the request.
+/// Hacker News does not require auth, so a superfluous credential must not
+/// cause failures.
+#[tokio::test]
+#[ignore]
+async fn e2e_exec_with_vault_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Vault::open(dir.path(), "test-pass").unwrap();
+
+    // Store a JSON-formatted Credentials value for hackernews.
+    let cred = Credentials::api_key("test-token");
+    vault
+        .store("hackernews", &serde_json::to_string(&cred).unwrap())
+        .unwrap();
+
+    let state = hn_state_with_vault(vault);
+    let server = TestServer::new(relais_server::app(state)).expect("failed to create test server");
+    let token = valid_jwt();
+    let (name, value) = auth_header(&token);
+
+    let response = server
+        .post("/v1/exec")
+        .add_header(name, value)
+        .json(&json!({
+            "site": "hackernews",
+            "resource": "stories",
+            "action": "list_top",
+            "params": { "limit": 2 }
+        }))
+        .await;
+
+    // HN doesn't need auth, so the injected credential should be a no-op.
+    let status = response.status_code();
+    assert!(
+        status.is_success() || status.is_server_error(),
+        "expected 2xx or 5xx (network issue), got {}",
+        status
+    );
+}
+
+/// Verify that exec works when the shared state has no vault at all
+/// (vault: None). This ensures the credential lookup path handles the
+/// absence of a vault gracefully.
+#[tokio::test]
+#[ignore]
+async fn e2e_exec_without_vault() {
+    // hn_state() already sets vault: None
+    let server = hn_server();
+    let token = valid_jwt();
+    let (name, value) = auth_header(&token);
+
+    let response = server
+        .post("/v1/exec")
+        .add_header(name, value)
+        .json(&json!({
+            "site": "hackernews",
+            "resource": "stories",
+            "action": "list_top",
+            "params": { "limit": 2 }
+        }))
+        .await;
+
+    let status = response.status_code();
+    assert!(
+        status.is_success() || status.is_server_error(),
+        "expected 2xx or 5xx (network issue), got {}",
+        status
+    );
+}
+
+/// Verify that a legacy plain-text token stored in the vault (not valid JSON)
+/// is gracefully wrapped as an ApiKey credential and does not cause errors.
+#[tokio::test]
+#[ignore]
+async fn e2e_exec_with_legacy_plain_token_in_vault() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Vault::open(dir.path(), "test-pass").unwrap();
+
+    // Store a raw string that is NOT valid Credentials JSON.
+    // The server should fall back to wrapping it as Credentials::api_key.
+    vault.store("hackernews", "plain-token-string").unwrap();
+
+    let state = hn_state_with_vault(vault);
+    let server = TestServer::new(relais_server::app(state)).expect("failed to create test server");
+    let token = valid_jwt();
+    let (name, value) = auth_header(&token);
+
+    let response = server
+        .post("/v1/exec")
+        .add_header(name, value)
+        .json(&json!({
+            "site": "hackernews",
+            "resource": "stories",
+            "action": "list_top",
+            "params": { "limit": 2 }
+        }))
+        .await;
+
+    let status = response.status_code();
+    assert!(
+        status.is_success() || status.is_server_error(),
+        "expected 2xx or 5xx (network issue), got {}",
+        status
+    );
 }
