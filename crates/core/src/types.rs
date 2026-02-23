@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -85,8 +87,76 @@ pub struct ExecContext {
     pub credentials: Option<Credentials>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
-    pub token: String,
-    pub token_type: AuthType,
+    pub credential_type: AuthType,
+    pub data: CredentialData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CredentialData {
+    ApiKey {
+        token: String,
+    },
+    OAuth {
+        access_token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<DateTime<Utc>>,
+        token_type: String,
+    },
+    Cookie {
+        cookies: HashMap<String, String>,
+        domain: String,
+        captured_at: DateTime<Utc>,
+        expires_at: Option<DateTime<Utc>>,
+    },
+}
+
+impl Credentials {
+    /// Create an API key credential.
+    pub fn api_key(token: impl Into<String>) -> Self {
+        Self {
+            credential_type: AuthType::APIKey,
+            data: CredentialData::ApiKey {
+                token: token.into(),
+            },
+        }
+    }
+
+    /// Create an OAuth credential.
+    pub fn oauth(
+        access_token: impl Into<String>,
+        refresh_token: Option<String>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            credential_type: AuthType::OAuth,
+            data: CredentialData::OAuth {
+                access_token: access_token.into(),
+                refresh_token,
+                expires_at,
+                token_type: "Bearer".into(),
+            },
+        }
+    }
+
+    /// Get the bearer token string (works for both ApiKey and OAuth).
+    pub fn bearer_token(&self) -> Option<&str> {
+        match &self.data {
+            CredentialData::ApiKey { token } => Some(token),
+            CredentialData::OAuth { access_token, .. } => Some(access_token),
+            CredentialData::Cookie { .. } => None,
+        }
+    }
+
+    /// Check if credentials are expired.
+    pub fn is_expired(&self) -> bool {
+        match &self.data {
+            CredentialData::OAuth {
+                expires_at: Some(exp),
+                ..
+            } => *exp < Utc::now(),
+            _ => false,
+        }
+    }
 }

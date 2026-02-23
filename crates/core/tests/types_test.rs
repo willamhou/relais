@@ -1,5 +1,5 @@
 use relais_core::{
-    Action, AuthType, Method, PaginationInfo, PaginationStyle,
+    Action, AuthType, CredentialData, Credentials, Method, PaginationInfo, PaginationStyle,
     RateLimit, Resource, Response, ResponseMeta, SiteManifest,
 };
 use serde_json::json;
@@ -60,4 +60,45 @@ fn response_meta_includes_pagination() {
     };
     assert!(response.meta.pagination.as_ref().unwrap().has_next);
     assert_eq!(response.meta.rate_limit.as_ref().unwrap().remaining, 58);
+}
+
+#[test]
+fn credentials_api_key_serializes() {
+    let cred = Credentials::api_key("ghp_test123");
+    let json = serde_json::to_string(&cred).unwrap();
+    let deserialized: Credentials = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.bearer_token(), Some("ghp_test123"));
+}
+
+#[test]
+fn credentials_oauth_serializes() {
+    let cred = Credentials::oauth("access_abc", Some("refresh_xyz".into()), None);
+    let json = serde_json::to_string(&cred).unwrap();
+    let deserialized: Credentials = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.bearer_token(), Some("access_abc"));
+    assert!(!deserialized.is_expired());
+}
+
+#[test]
+fn credentials_oauth_expired() {
+    use chrono::{Duration, Utc};
+    let past = Utc::now() - Duration::hours(1);
+    let cred = Credentials::oauth("old_token", None, Some(past));
+    assert!(cred.is_expired());
+}
+
+#[test]
+fn credentials_cookie_has_no_bearer() {
+    let mut cookies = std::collections::HashMap::new();
+    cookies.insert("session".into(), "abc123".into());
+    let cred = Credentials {
+        credential_type: AuthType::Cookie,
+        data: CredentialData::Cookie {
+            cookies,
+            domain: "example.com".into(),
+            captured_at: chrono::Utc::now(),
+            expires_at: None,
+        },
+    };
+    assert_eq!(cred.bearer_token(), None);
 }

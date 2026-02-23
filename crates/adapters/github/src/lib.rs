@@ -56,7 +56,9 @@ impl Adapter for GitHubAdapter {
         req = req.header("Accept", "application/vnd.github+json");
 
         if let Some(creds) = &ctx.credentials {
-            req = req.header("Authorization", format!("Bearer {}", creds.token));
+            if let Some(token) = creds.bearer_token() {
+                req = req.header("Authorization", format!("Bearer {}", token));
+            }
         }
 
         if let Some(body) = body {
