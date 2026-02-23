@@ -28,6 +28,7 @@ fn hn_state() -> AppState {
     Arc::new(SharedState {
         router,
         jwt_secret: TEST_JWT_SECRET.to_string(),
+        vault: None,
     })
 }
 

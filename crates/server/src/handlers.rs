@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use relais_core::types::ExecContext;
+use relais_core::types::{Credentials, ExecContext};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -107,12 +107,25 @@ pub async fn exec_action(
             )
         })?;
 
+    // Look up credentials from vault for this site.
+    let credentials = state.vault.as_ref().and_then(|vault| {
+        vault
+            .retrieve(&body.site)
+            .ok()
+            .flatten()
+            .and_then(|json_str| {
+                serde_json::from_str::<Credentials>(&json_str)
+                    .ok()
+                    .or_else(|| Some(Credentials::api_key(&json_str)))
+            })
+    });
+
     let ctx = ExecContext {
         site: body.site,
         resource: body.resource,
         action: body.action,
         params: body.params,
-        credentials: None,
+        credentials,
     };
 
     match adapter.exec(&ctx).await {
