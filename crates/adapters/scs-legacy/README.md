@@ -76,9 +76,14 @@ HTTP (relais serve): `POST /v1/exec` with `{"site":"scs","resource":"<module>","
   with HTTP 200 for business-level failures. The adapter maps only HTTP-level
   status (401/403→Auth, 404→NotFound, 429→RateLimited, other non-2xx→Other) and
   returns the body verbatim — callers inspect `err_code` themselves.
-- **No live e2e yet.** `exec` is covered end-to-end by wiremock; a real legacy
-  Beego instance (`:8501`) is heavyweight to stand up, so there is no `--ignored`
-  live test here (unlike `scs-v2`).
+- **Live e2e is `#[ignore]`d.** `exec` is covered end-to-end by wiremock. There
+  is also a live test (`tests/scs_legacy_e2e_test.rs`) that hits a real legacy
+  instance and asserts the full chain (lookup → URL → POST → parse) works; it is
+  ignored by default because standing up the legacy Beego app + DB is heavyweight.
+  Note the bundled DB dump (`scs_old/resource/archieve/scs.sql`) lags the code
+  schema (some tables/columns are missing), so business endpoints may return
+  `{err_code, err_msg}` — the adapter passes that through; the e2e only asserts
+  the round-trip, not business success.
 
 ## Tests
 
