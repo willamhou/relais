@@ -91,12 +91,18 @@ HTTP (relais serve): `POST /v1/exec` with `{"site":"scs","resource":"<module>","
 # Rust: spec-load + pure helpers + wiremock HTTP-path
 cargo test -p relais-adapter-scs-legacy
 
-# Python: generator golden tests — pin the swagger->spec mapping rules.
+# Python: generator golden tests (L1) — pin the swagger->spec mapping rules.
 # Highest leverage: all 1324 endpoints share this transform, so these few
 # cases pin the generated method/path/params for every endpoint.
 cd crates/adapters/scs-legacy/generate && python3 -m unittest test_gen_spec
+
+# L2 contract sweep — probe ALL 1324 endpoints against a live legacy, asserting
+# every adapter (method, path) actually routes. Ignored by default.
+SCS_LEGACY_BASE_URL=http://127.0.0.1:8501 \
+  cargo test -p relais-adapter-scs-legacy --test scs_legacy_sweep_test -- --ignored --nocapture
 ```
 
-See [docs notes in the PR] for the full five-layer coverage plan (L0 structural
-invariants, L1 generator golden — this file, L2 contract sweep vs live legacy,
-L3 engine-shape samples, L4 core-module real CRUD).
+Coverage plan: **L0** structural invariants (all 1324) · **L1** generator golden
+(`generate/test_gen_spec.py`) · **L2** contract sweep (`tests/scs_legacy_sweep_test.rs`
+— verified 1324/1324 routes hit, 0 mismatches against live legacy) · **L3**
+engine-shape samples (wiremock) · **L4** core-module real CRUD.

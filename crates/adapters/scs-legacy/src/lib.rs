@@ -241,8 +241,13 @@ fn parse_body(text: &str) -> Result<Value, AdapterError> {
     if text.trim().is_empty() {
         return Ok(json!({}));
     }
-    serde_json::from_str(text)
-        .map_err(|e| AdapterError::Other(anyhow::anyhow!("invalid legacy SCS response body: {e}")))
+    // Most legacy endpoints return JSON, but a few (test stubs, gateway callbacks,
+    // exports) return plain text/HTML. Wrap non-JSON in `{ "raw": ... }` rather than
+    // failing the whole call, so every endpoint round-trips.
+    match serde_json::from_str(text) {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(json!({ "raw": text })),
+    }
 }
 
 #[cfg(test)]
@@ -327,5 +332,29 @@ mod tests {
     fn with_base_url_strips_trailing_slash() {
         let a = ScsLegacyAdapter::with_base_url("http://h:8501/");
         assert_eq!(a.base_url, "http://h:8501");
+    }
+
+    #[test]
+    fn parse_body_empty_is_empty_object() {
+        assert_eq!(parse_body("").unwrap(), json!({}));
+        assert_eq!(parse_body("  ").unwrap(), json!({}));
+    }
+
+    #[test]
+    fn parse_body_json_passes_through() {
+        assert_eq!(
+            parse_body(r#"{"err_code":"0"}"#).unwrap(),
+            json!({"err_code": "0"})
+        );
+    }
+
+    #[test]
+    fn parse_body_non_json_wraps_raw() {
+        // legacy test stubs / gateway callbacks may return plain text — don't fail.
+        assert_eq!(parse_body("OK").unwrap(), json!({"raw": "OK"}));
+        assert_eq!(
+            parse_body("<html>x</html>").unwrap(),
+            json!({"raw": "<html>x</html>"})
+        );
     }
 }
