@@ -100,9 +100,34 @@ cd crates/adapters/scs-legacy/generate && python3 -m unittest test_gen_spec
 # every adapter (method, path) actually routes. Ignored by default.
 SCS_LEGACY_BASE_URL=http://127.0.0.1:8501 \
   cargo test -p relais-adapter-scs-legacy --test scs_legacy_sweep_test -- --ignored --nocapture
+
+# Business reachability sweep — logs in with a REAL token, probes read-only
+# endpoints, classifies responses (business-reachable / system-error / routed-miss).
+# Requires a schema-aligned DB (see schema_sync below).
+SCS_LEGACY_BASE_URL=http://127.0.0.1:8501 \
+  cargo test -p relais-adapter-scs-legacy --test scs_legacy_business_test -- --ignored --nocapture
 ```
+
+### Live legacy setup (for the business sweep)
+
+The bundled DB dump lags the code schema, so `generate/schema_sync.py` aligns it
+(adds missing tables/columns derived from the code's `*Do` structs):
+
+```sh
+# in the scs repo: load the dump, then align the schema
+docker compose -f deploy/docker-compose.yaml up -d postgres redis
+tests/fixtures/load-legacy-db.sh
+python3 <relais>/crates/adapters/scs-legacy/generate/schema_sync.py \
+  /path/to/scs_old <postgres_container> --apply
+```
+
+With the schema aligned, the business sweep reaches **568/579 read-only endpoints
+(98%)** — their business logic actually executes against real data. The ~10
+remaining are tables referenced only by raw SQL (no `*Do` struct, absent from the
+dump) — a legacy test-data gap, not a mapping issue.
 
 Coverage plan: **L0** structural invariants (all 1324) · **L1** generator golden
 (`generate/test_gen_spec.py`) · **L2** contract sweep (`tests/scs_legacy_sweep_test.rs`
-— verified 1324/1324 routes hit, 0 mismatches against live legacy) · **L3**
-engine-shape samples (wiremock) · **L4** core-module real CRUD.
+— 1324/1324 routes hit) · **L-B** business reachability (`tests/scs_legacy_business_test.rs`
+— 568/579 read-only endpoints run real business logic) · **L3** engine-shape
+samples (wiremock) · **L4** core-module real CRUD.
