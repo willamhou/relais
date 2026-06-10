@@ -105,6 +105,16 @@ curl -X POST http://localhost:3000/v1/exec \
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to write and submit adapters.
 
+## Agent Skills
+
+The [`skills/`](skills/) directory ships loadable skills that teach an AI agent
+to drive relais for a specific domain. They are distributables (relais itself
+does not load them) — a third party can drop one into their agent's skills
+directory (e.g. a Claude Code `skills/` folder) and the agent can immediately
+operate the corresponding site through relais.
+
+- [`skills/scs-accounts`](skills/scs-accounts/SKILL.md) — manage SCS (娱集市后台) accounts via relais.
+
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) and [Apache 2.0](LICENSE-APACHE).
