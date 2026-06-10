@@ -88,5 +88,15 @@ HTTP (relais serve): `POST /v1/exec` with `{"site":"scs","resource":"<module>","
 ## Tests
 
 ```sh
-cargo test -p relais-adapter-scs-legacy   # spec-load + pure helpers + wiremock HTTP-path
+# Rust: spec-load + pure helpers + wiremock HTTP-path
+cargo test -p relais-adapter-scs-legacy
+
+# Python: generator golden tests — pin the swagger->spec mapping rules.
+# Highest leverage: all 1324 endpoints share this transform, so these few
+# cases pin the generated method/path/params for every endpoint.
+cd crates/adapters/scs-legacy/generate && python3 -m unittest test_gen_spec
 ```
+
+See [docs notes in the PR] for the full five-layer coverage plan (L0 structural
+invariants, L1 generator golden — this file, L2 contract sweep vs live legacy,
+L3 engine-shape samples, L4 core-module real CRUD).
