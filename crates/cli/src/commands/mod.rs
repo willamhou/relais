@@ -32,6 +32,9 @@ pub fn build_router() -> Router {
     router.register(Box::new(
         relais_adapter_hackernews::HackerNewsAdapter::new(),
     ));
+    router.register(Box::new(
+        relais_adapter_scs::ScsAdapter::new(),
+    ));
     // LLM fallback adapter requires a provider configuration.
     // Skip registration here; users can configure it via environment variables in the future.
     router
