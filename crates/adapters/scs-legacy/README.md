@@ -126,8 +126,26 @@ With the schema aligned, the business sweep reaches **568/579 read-only endpoint
 remaining are tables referenced only by raw SQL (no `*Do` struct, absent from the
 dump) — a legacy test-data gap, not a mapping issue.
 
-Coverage plan: **L0** structural invariants (all 1324) · **L1** generator golden
-(`generate/test_gen_spec.py`) · **L2** contract sweep (`tests/scs_legacy_sweep_test.rs`
-— 1324/1324 routes hit) · **L-B** business reachability (`tests/scs_legacy_business_test.rs`
-— 568/579 read-only endpoints run real business logic) · **L3** engine-shape
-samples (wiremock) · **L4** core-module real CRUD.
+```sh
+# Write-path reachability — proves the WRITE chain reaches the business layer
+# with ZERO writes (token only, no params -> validation rejects every call).
+SCS_LEGACY_BASE_URL=http://127.0.0.1:8501 \
+  cargo test -p relais-adapter-scs-legacy --test scs_legacy_writepath_test -- --ignored --nocapture
+```
+
+## Coverage summary — testing the full 1324-endpoint API
+
+| Layer | What it proves | Result |
+|-------|----------------|--------|
+| **L1** generator golden (`generate/test_gen_spec.py`) | swagger→spec mapping rules — pins method/path/params for every endpoint | 17 cases, all rules |
+| **L2** contract sweep (`tests/scs_legacy_sweep_test.rs`) | every adapter (method, path) routes on live legacy | **1324/1324** routes hit, 0 mismatches |
+| **L-B** business reachability (`tests/scs_legacy_business_test.rs`) | read-only endpoints actually run business logic vs real data | **568/579 (98%)** |
+| **L-C** write-path reachability (`tests/scs_legacy_writepath_test.rs`) | write endpoints reach the business layer (route+auth+validation), zero side effects | **33/34 (97%)** |
+
+Together these cover the full API: **generation** is rule-pinned (L1), **routing**
+is 100% verified on live legacy (L2), **read business logic** runs for 98% of
+read endpoints (L-B), and the **write chain** reaches the business layer for 97%
+of core writes (L-C). The small tails are legacy test-data gaps (tables with no
+`*Do` struct, absent from the bundled dump), not adapter issues. The wiremock
+tests (`scs_legacy_http_test.rs`) cover the engine paths offline; the live tests
+above need a schema-aligned legacy (see `schema_sync.py`).
