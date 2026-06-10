@@ -7,6 +7,7 @@ members = [
     "crates/llm-fallback",
     "crates/adapters/github",
     "crates/adapters/hackernews",
+    "crates/adapters/scs",
 ]
 
 [workspace.package]
@@ -31,3 +32,4 @@ relais-server = { path = "crates/server" }
 relais-llm-fallback = { path = "crates/llm-fallback" }
 relais-adapter-github = { path = "crates/adapters/github" }
 relais-adapter-hackernews = { path = "crates/adapters/hackernews" }
+relais-adapter-scs = { path = "crates/adapters/scs" }
