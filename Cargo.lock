@@ -2254,6 +2254,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "relais-adapter-scs-legacy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "relais-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
 name = "relais-cli"
 version = "0.1.0"
 dependencies = [
@@ -2267,6 +2282,7 @@ dependencies = [
  "relais-adapter-github",
  "relais-adapter-hackernews",
  "relais-adapter-scs",
+ "relais-adapter-scs-legacy",
  "relais-core",
  "relais-llm-fallback",
  "relais-server",

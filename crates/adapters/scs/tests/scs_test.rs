@@ -9,8 +9,8 @@ fn adapter() -> ScsAdapter {
 #[test]
 fn scs_manifest_id_and_name() {
     let m = adapter().manifest();
-    assert_eq!(m.id, "scs");
-    assert_eq!(m.name, "SCS");
+    assert_eq!(m.id, "scs-v2");
+    assert_eq!(m.name, "SCS (kratos v2)");
 }
 
 #[test]
