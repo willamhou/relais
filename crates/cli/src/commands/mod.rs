@@ -18,23 +18,18 @@ pub fn open_vault() -> anyhow::Result<relais_core::vault::Vault> {
         .join(".relais")
         .join("vault");
     std::fs::create_dir_all(&vault_dir)?;
-    let password = std::env::var("RELAIS_VAULT_PASSWORD")
-        .unwrap_or_else(|_| "relais-dev-password".into());
+    let password =
+        std::env::var("RELAIS_VAULT_PASSWORD").unwrap_or_else(|_| "relais-dev-password".into());
     Ok(relais_core::vault::Vault::open(&vault_dir, &password)?)
 }
 
 /// Build a Router with all built-in adapters registered.
 pub fn build_router() -> Router {
     let mut router = Router::new();
-    router.register(Box::new(
-        relais_adapter_github::GitHubAdapter::new(),
-    ));
-    router.register(Box::new(
-        relais_adapter_hackernews::HackerNewsAdapter::new(),
-    ));
-    router.register(Box::new(
-        relais_adapter_scs::ScsAdapter::new(),
-    ));
+    router.register(Box::new(relais_adapter_github::GitHubAdapter::new()));
+    router.register(Box::new(relais_adapter_hackernews::HackerNewsAdapter::new()));
+    router.register(Box::new(relais_adapter_scs::ScsAdapter::new()));
+    router.register(Box::new(relais_adapter_scs_legacy::ScsLegacyAdapter::new()));
     // LLM fallback adapter requires a provider configuration.
     // Skip registration here; users can configure it via environment variables in the future.
     router

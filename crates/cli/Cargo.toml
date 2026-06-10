@@ -18,6 +18,7 @@ relais-server.workspace = true
 relais-adapter-github.workspace = true
 relais-adapter-hackernews.workspace = true
 relais-adapter-scs.workspace = true
+relais-adapter-scs-legacy.workspace = true
 relais-llm-fallback.workspace = true
 serde.workspace = true
 serde_json.workspace = true

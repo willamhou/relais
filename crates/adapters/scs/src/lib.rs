@@ -53,8 +53,8 @@ impl Default for ScsAdapter {
 impl Adapter for ScsAdapter {
     fn manifest(&self) -> SiteManifest {
         SiteManifest {
-            id: "scs".into(),
-            name: "SCS".into(),
+            id: "scs-v2".into(),
+            name: "SCS (kratos v2)".into(),
             base_url: self.base_url.clone(),
             auth_type: AuthType::APIKey,
         }

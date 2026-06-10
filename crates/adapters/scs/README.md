@@ -13,7 +13,7 @@ gRPC and requires no SCS SDK.
 | What | How | Default |
 |------|-----|---------|
 | SCS endpoint | `SCS_BASE_URL` env var, read by the relais process at startup | `http://127.0.0.1:8000` |
-| Auth (optional) | store an `acs_token` in the relais vault under site `scs`; sent as `Authorization: Bearer <token>` | none |
+| Auth (optional) | store an `acs_token` in the relais vault under site `scs-v2`; sent as `Authorization: Bearer <token>` | none |
 
 > `SCS_BASE_URL` is read when the relais process starts (CLI invocation or
 > `relais serve`). Changing it means re-running with the new value — no rebuild.
@@ -36,7 +36,7 @@ One resource, `accounts`, with five actions mapped to SCS's REST endpoints:
 `type` is the `AccountType` enum: `0`=unspecified, `1`=center, `2`=supplier,
 `3`=distributor.
 
-Run `relais apis scs` or `relais spec scs.accounts.<action>` for the live JSON
+Run `relais apis scs-v2` or `relais spec scs-v2.accounts.<action>` for the live JSON
 Schemas.
 
 ## Usage — CLI
@@ -44,14 +44,14 @@ Schemas.
 ```sh
 export SCS_BASE_URL=http://127.0.0.1:8000
 
-relais apis scs                                    # list resources/actions
-relais spec scs.accounts.create                    # inspect an action's schema
+relais apis scs-v2                                    # list resources/actions
+relais spec scs-v2.accounts.create                    # inspect an action's schema
 
-relais exec scs.accounts.list   --data '{"page":1,"page_size":10}'
-relais exec scs.accounts.create --data '{"name":"Acme","phone":"13800000000","type":2}'
-relais exec scs.accounts.get    --data '{"id":1}'
-relais exec scs.accounts.update --data '{"id":1,"name":"Acme-Updated","phone":"139","type":2}'
-relais exec scs.accounts.delete --data '{"id":1}'
+relais exec scs-v2.accounts.list   --data '{"page":1,"page_size":10}'
+relais exec scs-v2.accounts.create --data '{"name":"Acme","phone":"13800000000","type":2}'
+relais exec scs-v2.accounts.get    --data '{"id":1}'
+relais exec scs-v2.accounts.update --data '{"id":1,"name":"Acme-Updated","phone":"139","type":2}'
+relais exec scs-v2.accounts.delete --data '{"id":1}'
 ```
 
 ## Usage — HTTP (relais serve)
@@ -62,7 +62,7 @@ SCS_BASE_URL=http://127.0.0.1:8000 relais serve --port 3000 --jwt-secret my-secr
 curl -X POST http://localhost:3000/v1/exec \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"site":"scs","resource":"accounts","action":"list","params":{"page":1,"page_size":10}}'
+  -d '{"site":"scs-v2","resource":"accounts","action":"list","params":{"page":1,"page_size":10}}'
 ```
 
 The response is the standard relais envelope: `{ "data": ..., "meta": { "pagination", "rate_limit", "cached" } }`.

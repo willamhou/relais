@@ -100,6 +100,8 @@ curl -X POST http://localhost:3000/v1/exec \
 | `relais-llm-fallback` | Headless browser fetch + multi-provider LLM extraction |
 | `relais-adapter-github` | Native GitHub adapter (repos, issues, comments) |
 | `relais-adapter-hackernews` | Native Hacker News adapter (stories, comments, users) |
+| `relais-adapter-scs-legacy` | Legacy SCS adapter — full `/1/*` API (79 modules, 1324 endpoints), generated from Swagger; site `scs` |
+| `relais-adapter-scs` | SCS kratos-rewrite adapter (accounts); site `scs-v2` |
 
 ## Writing Adapters
 
@@ -113,7 +115,8 @@ does not load them) — a third party can drop one into their agent's skills
 directory (e.g. a Claude Code `skills/` folder) and the agent can immediately
 operate the corresponding site through relais.
 
-- [`skills/scs-accounts`](skills/scs-accounts/SKILL.md) — manage SCS (娱集市后台) accounts via relais.
+- [`skills/scs-legacy`](skills/scs-legacy/SKILL.md) — operate the full SCS (娱集市后台) platform (79 modules) via relais.
+- [`skills/scs-accounts`](skills/scs-accounts/SKILL.md) — manage SCS accounts on the kratos `scs-v2` service via relais.
 
 ## License
 
