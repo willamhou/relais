@@ -56,12 +56,17 @@ explicitly asked to (`下单` / `提交订单`).
 export SCS_LEGACY_BASE_URL=https://api.tffair.cn
 ```
 
-## Default account (from the Order Flow Command)
+## Account
+
+Do not hard-code credentials here. Take the login name / password from the
+operator (env vars or a secret store) at run time, log in via step 1, and store
+the returned `acs_token` in the vault. The default test account's
+`customer_id` / `service_object_id` is `55`.
 
 | Field | Value |
 |-------|-------|
-| login_name | `QLLKHZHH` |
-| password | `QLLKHZHH` |
+| login_name | `<from operator / env>` |
+| password | `<from operator / env>` |
 | customer_id / service_object_id | `55` |
 
 ## Parse the user request
@@ -125,7 +130,7 @@ All calls are `relais exec scs.<resource>.<action> --data '<json>'`. Omit
 ### 1. Login (read-only) — get token + customer_id
 
 ```sh
-relais exec scs.login.do --data '{"login_name":"QLLKHZHH","password":"QLLKHZHH"}'
+relais exec scs.login.do --data "{\"login_name\":\"$SCS_LOGIN\",\"password\":\"$SCS_PASSWORD\"}"
 # -> response.acs_token, response.customer_id
 relais vault store scs <acs_token>     # so later calls are authenticated
 ```
