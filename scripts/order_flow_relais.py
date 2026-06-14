@@ -18,8 +18,9 @@ Usage:
   python3 scripts/order_flow_relais.py \
     --customer-id 55 --goods "拉弗格10年" --amount 2 --receiver 测试 [--submit]
 
-Without --submit it stops after preparing + verifying the cart (no order placed).
-With --submit it calls orders.order_for_all and PLACES A REAL ORDER.
+Without --submit it stops after preparing + verifying the cart — note this still
+creates/updates/selects cart items (it mutates cart state); it just places no
+order. With --submit it calls orders.order_for_all and PLACES A REAL ORDER.
 """
 import argparse
 import json
@@ -40,7 +41,10 @@ def call(resource, action, params):
     )
     if p.returncode != 0:
         raise SystemExit(f"relais exec scs.{resource}.{action} failed: {p.stderr.strip()}")
-    body = json.loads(p.stdout).get("data", {})
+    body = json.loads(p.stdout).get("data")
+    if not isinstance(body, dict):
+        # Don't silently proceed on malformed output — this flow places real orders.
+        raise SystemExit(f"scs.{resource}.{action}: unexpected relais output (no data object): {p.stdout[:200]}")
     ec = body.get("err_code")
     if ec not in (None, "", 0, "0"):
         raise SystemExit(
@@ -97,15 +101,15 @@ def run(customer_id, keyword, amount, receiver, submit):
             "receive_address_id": str(receive_id),
         })
 
-    # 5. query cart, find target item (by new cart_id, else newest same goods).
+    # 5. query cart, find the item we just created — by EXACT cart id only.
+    # No fuzzy fallback: latching onto a different existing item here could
+    # submit the wrong order. IDs are normalized to strings before comparison.
+    if new_cart_id is None:
+        raise SystemExit("create did not return a cart id — aborting before any order.")
     items = query_cart().get("cart_items") or []
-    target = next((i for i in items if i.get("cart_id") == new_cart_id), None)
+    target = next((i for i in items if str(i.get("cart_id")) == str(new_cart_id)), None)
     if not target:
-        same = sorted((i for i in items if i.get("goods_id") == goods.get("goods_id")),
-                      key=lambda i: i.get("cart_id"), reverse=True)
-        target = same[0] if same else None
-    if not target:
-        raise SystemExit("Target cart item not found after add.")
+        raise SystemExit(f"created cart item {new_cart_id} not found in cart — aborting.")
     target_cart_id = target.get("cart_id")
     print(f"[5] target cart item: cart_id={target_cart_id} amount={target.get('amount')}")
 
@@ -117,7 +121,7 @@ def run(customer_id, keyword, amount, receiver, submit):
             "goods_count_once": target.get("goods_count_to_shopping_cart"), "order_memo": "",
         })
         items = query_cart().get("cart_items") or []
-        target = next((i for i in items if i.get("cart_id") == target_cart_id), None)
+        target = next((i for i in items if str(i.get("cart_id")) == str(target_cart_id)), None)
         if not target or int(target.get("amount")) != amount:
             raise SystemExit(f"amount after update = {target and target.get('amount')}, expected {amount}")
         print(f"[6] quantity updated -> {amount}")
@@ -128,12 +132,12 @@ def run(customer_id, keyword, amount, receiver, submit):
     call("shoppingcarts", "select", {
         "service_object_id": customer_id,
         "select": [{"id": i.get("cart_id"),
-                    "select_status": 1 if i.get("cart_id") == target_cart_id else 2}
+                    "select_status": 1 if str(i.get("cart_id")) == str(target_cart_id) else 2}
                    for i in items],
     })
     cart = query_cart()
     selected = [i for i in (cart.get("cart_items") or []) if i.get("select_status") == 1]
-    if len(selected) != 1 or selected[0].get("cart_id") != target_cart_id:
+    if len(selected) != 1 or str(selected[0].get("cart_id")) != str(target_cart_id):
         raise SystemExit(f"Unexpected selected items: {[i.get('cart_id') for i in selected]}")
     sel = selected[0]
     print(f"[7] selected exactly one: cart_id={sel.get('cart_id')} total_amt={cart.get('total_amt')}")
@@ -143,14 +147,17 @@ def run(customer_id, keyword, amount, receiver, submit):
         return
 
     # 8. submit order (PLACES A REAL ORDER)
+    total_amt = cart.get("total_amt")
+    if total_amt is None:
+        raise SystemExit("cart total_amt missing — aborting before placing the order.")
     activity_ids = [a.get("activity_id") for a in (sel.get("activity_info") or [])]
     order_no = time.strftime("%y%m%d%H%M%S") + str(random.randint(10000000, 99999999))
-    print(f"\n[8] submitting order_no={order_no} total_amt={cart.get('total_amt')} ...")
+    print(f"\n[8] submitting order_no={order_no} total_amt={total_amt} ...")
     order = call("orders", "order_for_all", {
         "order_no": order_no,
         "address_item": [{"agent_id": "", "customer_id": customer_id, "receive_info_id": receive_id}],
         "shopping_cart_ids": [sel.get("cart_id")],
-        "total_amt": str(cart.get("total_amt")),
+        "total_amt": str(total_amt),
         "shopping_carts": [{"id": sel.get("cart_id"), "activity_customer_type": 0, "activity_ids": activity_ids}],
         "service_object_id": customer_id,
         "recycle_bottle_voucher": [],
@@ -165,7 +172,8 @@ def main():
     ap.add_argument("--goods", required=True, help="goods keyword")
     ap.add_argument("--amount", type=int, required=True)
     ap.add_argument("--receiver", required=True, help="exact contact_info of the receiving address")
-    ap.add_argument("--submit", action="store_true", help="place a REAL order (omit for a dry cart run)")
+    ap.add_argument("--submit", action="store_true",
+                    help="place a REAL order (omit = no-order run, but cart state is still mutated)")
     a = ap.parse_args()
     run(a.customer_id, a.goods, a.amount, a.receiver, a.submit)
 

@@ -89,8 +89,9 @@ HTTP (relais serve): `POST /v1/exec` with `{"site":"scs","resource":"<module>","
 
 ```sh
 # Rust: spec-load + pure helpers + wiremock HTTP-path + offline order-flow e2e
-# (tests/scs_legacy_order_flow_test.rs drives the full order flow against a mock
-#  server — see skills/scs-order-flow for the live, production-verified flow).
+# (tests/scs_legacy_order_flow_test.rs drives the order-flow happy path — submit,
+#  no quantity-update branch — against a mock server; see skills/scs-order-flow
+#  for the live, production-verified flow).
 cargo test -p relais-adapter-scs-legacy
 
 # Python: generator golden tests (L1) — pin the swagger->spec mapping rules.

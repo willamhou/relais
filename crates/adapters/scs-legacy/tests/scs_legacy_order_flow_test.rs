@@ -76,14 +76,31 @@ async fn mount_flow(server: &MockServer) {
         .mount(server)
         .await;
 
-    // 5/7. cart query — receive_address_id MUST be the string "93". The single
-    // canned response satisfies both the find-target and verify-selection reads:
-    // the target is present, amount already 2 (no update), and selected.
+    // 5. first cart read — target present but NOT yet selected (select_status 2).
+    // receive_address_id MUST be the string "93" (a number → err_code 201).
+    // `up_to_n_times(1)`: only the first getShoppingCarts gets this response;
+    // mocks are tried in mount order, so this precedes the "selected" mock below.
     Mock::given(method("POST"))
         .and(path("/1/shoppingcarts/getShoppingCarts"))
         .and(body_partial_json(json!({
             "acs_token": TOKEN, "customer_id": CUSTOMER_ID, "receive_address_id": "93"
         })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "total_amt": 598,
+            "cart_items": [{
+                "cart_id": CART_ID, "goods_id": "12633", "goods_name": "拉弗格10年单一麦芽威士忌",
+                "amount": 2, "select_status": 2, "supplier_id": "81",
+                "goods_count_to_shopping_cart": 1
+            }]
+        })))
+        .up_to_n_times(1)
+        .mount(server)
+        .await;
+
+    // 7. second cart read (after select) — now selected (select_status 1). This
+    // makes the "exactly one selected" check react to a real state transition.
+    Mock::given(method("POST"))
+        .and(path("/1/shoppingcarts/getShoppingCarts"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "total_amt": 598,
             "cart_items": [{
@@ -95,25 +112,31 @@ async fn mount_flow(server: &MockServer) {
         .mount(server)
         .await;
 
-    // 7. select.
+    // 7. select — must be called exactly once, selecting ONLY the target
+    // (select array carries id=target with select_status 1).
     Mock::given(method("POST"))
         .and(path("/1/shoppingcarts/select"))
-        .and(body_partial_json(
-            json!({"acs_token": TOKEN, "service_object_id": CUSTOMER_ID}),
-        ))
+        .and(body_partial_json(json!({
+            "acs_token": TOKEN, "service_object_id": CUSTOMER_ID,
+            "select": [{"id": CART_ID, "select_status": 1}]
+        })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .expect(1)
         .mount(server)
         .await;
 
-    // 8. submit order — total_amt carried as a string.
+    // 8. submit order — assert the safety-critical fields and their types:
+    // total_amt as a string, the right cart id, and the string customer id.
     Mock::given(method("POST"))
         .and(path("/1/orders/order_for_all"))
-        .and(body_partial_json(
-            json!({"acs_token": TOKEN, "total_amt": "598"}),
-        ))
+        .and(body_partial_json(json!({
+            "acs_token": TOKEN, "service_object_id": CUSTOMER_ID,
+            "total_amt": "598", "shopping_cart_ids": [CART_ID]
+        })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data_list": [{"order_info": [{"order_id": "192076", "order_sub_no": "0001"}]}]
         })))
+        .expect(1)
         .mount(server)
         .await;
 }
@@ -189,6 +212,10 @@ async fn order_flow_offline_end_to_end() {
         .find(|i| i["cart_id"] == cart_id)
         .expect("target cart item");
     assert_eq!(target["amount"], 2);
+    assert_eq!(
+        target["select_status"], 2,
+        "target should not be selected on the first read"
+    );
 
     // 7. select only the target, then verify exactly one selected.
     let select_list: Vec<Value> = items

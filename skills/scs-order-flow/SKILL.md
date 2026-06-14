@@ -163,7 +163,7 @@ Apply the **receiver rule**: exact `contact_info` match → `receive_id`.
 
 ```sh
 relais exec scs.shoppingcarts.getShoppingCarts \
-  --data '{"customer_id":"55","is_recycle_bottle":0,"receive_address_id":<receive_id>}'
+  --data '{"customer_id":"55","is_recycle_bottle":0,"receive_address_id":"<receive_id>"}'
 ```
 Find the target cart item per the **cart rule**.
 
@@ -191,7 +191,7 @@ relais exec scs.orders.order_for_all --data '{
   "order_no":"<yyMMddHHmmss + 8 random digits>",
   "address_item":[{"agent_id":"","customer_id":"55","receive_info_id":<receive_id>}],
   "shopping_cart_ids":[<target_cart_id>],
-  "total_amt":<cart.total_amt>,
+  "total_amt":"<cart.total_amt>",
   "shopping_carts":[{"id":<target_cart_id>,"activity_customer_type":0,"activity_ids":[<...>]}],
   "service_object_id":"55","recycle_bottle_voucher":[]}'
 ```
