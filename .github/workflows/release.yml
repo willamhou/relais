@@ -1,0 +1,70 @@
+name: release
+
+# Publish every workspace crate to crates.io when a version tag is pushed.
+#
+#   1. bump the version in the root Cargo.toml ([workspace.package].version)
+#   2. commit it, then:  git tag v0.1.1 && git push origin v0.1.1
+#
+# The job publishes bottom-up (core -> adapters/llm-fallback -> server -> cli)
+# so each crate's path+version deps resolve from crates.io. cargo waits for the
+# index to update between publishes; a small retry wrapper rides out the
+# crates.io rate limit (HTTP 429).
+#
+# Requires the repo secret CARGO_REGISTRY_TOKEN (a crates.io API token with the
+# publish-update scope).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check tag matches workspace version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "tag=$tag  workspace version=$ver"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag v$tag does not match [workspace.package].version $ver"
+            exit 1
+          fi
+
+      - name: Publish all crates (dependency order)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local c="$1" tries=0
+            while :; do
+              out="$(cargo publish -p "$c" 2>&1)" && { echo "$out"; echo "published $c"; return 0; }
+              echo "$out"
+              if echo "$out" | grep -q "already exists"; then
+                echo "$c already published at this version — skipping"; return 0
+              fi
+              if echo "$out" | grep -q "429 Too Many Requests"; then
+                tries=$((tries+1)); [ "$tries" -le 20 ] || { echo "retry budget exhausted for $c"; return 1; }
+                echo "rate limited; sleeping 60s (retry #$tries)"; sleep 60; continue
+              fi
+              return 1
+            done
+          }
+          publish relais-core
+          publish relais-adapter-github
+          publish relais-adapter-hackernews
+          publish relais-adapter-scs
+          publish relais-adapter-scs-legacy
+          publish relais-llm-fallback
+          publish relais-server
+          publish relais-cli

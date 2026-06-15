@@ -3,6 +3,8 @@ name = "relais-adapter-hackernews"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Hacker News adapter for the relais API gateway."
+repository.workspace = true
 
 [dependencies]
 relais-core.workspace = true

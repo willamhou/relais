@@ -3,6 +3,8 @@ name = "relais-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Command-line interface for the relais API gateway (installs the `relais` binary)."
+repository.workspace = true
 
 [lib]
 name = "relais_cli"

@@ -15,6 +15,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/willamhou/relais"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -28,10 +29,10 @@ async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-relais-core = { path = "crates/core" }
-relais-server = { path = "crates/server" }
-relais-llm-fallback = { path = "crates/llm-fallback" }
-relais-adapter-github = { path = "crates/adapters/github" }
-relais-adapter-hackernews = { path = "crates/adapters/hackernews" }
-relais-adapter-scs = { path = "crates/adapters/scs" }
-relais-adapter-scs-legacy = { path = "crates/adapters/scs-legacy" }
+relais-core = { path = "crates/core", version = "0.1.0" }
+relais-server = { path = "crates/server", version = "0.1.0" }
+relais-llm-fallback = { path = "crates/llm-fallback", version = "0.1.0" }
+relais-adapter-github = { path = "crates/adapters/github", version = "0.1.0" }
+relais-adapter-hackernews = { path = "crates/adapters/hackernews", version = "0.1.0" }
+relais-adapter-scs = { path = "crates/adapters/scs", version = "0.1.0" }
+relais-adapter-scs-legacy = { path = "crates/adapters/scs-legacy", version = "0.1.0" }

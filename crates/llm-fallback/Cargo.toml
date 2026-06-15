@@ -3,6 +3,8 @@ name = "relais-llm-fallback"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "LLM/browser-driven fallback adapter for the relais API gateway."
+repository.workspace = true
 
 [dependencies]
 relais-core.workspace = true
