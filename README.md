@@ -107,6 +107,11 @@ curl -X POST http://localhost:3000/v1/exec \
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to write and submit adapters.
 
+## Releasing
+
+All crates publish to crates.io together on a `vX.Y.Z` tag — see
+[RELEASING.md](RELEASING.md).
+
 ## Agent Skills
 
 The [`skills/`](skills/) directory ships loadable skills that teach an AI agent
