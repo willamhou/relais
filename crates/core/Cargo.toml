@@ -3,6 +3,8 @@ name = "relais-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Core traits, types, and credential vault for the relais API gateway."
+repository.workspace = true
 
 [dependencies]
 serde.workspace = true

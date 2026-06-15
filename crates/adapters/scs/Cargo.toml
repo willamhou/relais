@@ -3,6 +3,9 @@ name = "relais-adapter-scs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "SCS (kratos rewrite) adapter for the relais API gateway."
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 relais-core.workspace = true

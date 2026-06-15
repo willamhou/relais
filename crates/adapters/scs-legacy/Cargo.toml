@@ -3,6 +3,9 @@ name = "relais-adapter-scs-legacy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Legacy SCS (Beego) adapter for the relais API gateway — generated, data-driven over the full /1 action API."
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 relais-core.workspace = true

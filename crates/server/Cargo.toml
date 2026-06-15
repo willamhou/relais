@@ -3,6 +3,8 @@ name = "relais-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "HTTP server (axum) exposing the relais API gateway over /v1/exec."
+repository.workspace = true
 
 [dependencies]
 relais-core.workspace = true
