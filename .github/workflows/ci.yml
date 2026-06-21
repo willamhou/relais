@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # Choke-point guard (impl spec C5 / design F-10): production server & CLI code
+      # must execute actions through Router::exec, never by calling an adapter's
+      # exec() directly — otherwise auditing can be bypassed. Tests are exempt.
+      - name: Choke-point guard (no direct adapter exec)
+        run: |
+          # Catch `.exec(`, `. exec (`, and `Adapter::exec`; allow only `router.exec`.
+          hits=$(grep -rnE '\.[[:space:]]*exec[[:space:]]*\(|Adapter::exec' \
+                   crates/server/src crates/cli/src \
+                 | grep -vE 'router[[:space:]]*\.[[:space:]]*exec' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Direct adapter exec() found outside the Router::exec choke point:"
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Build (default)
+        run: cargo build --workspace
+
+      - name: Build (audit feature)
+        run: cargo build -p relais-core --features audit
+
+      - name: Clippy (relais-core, default)
+        run: cargo clippy -p relais-core --all-targets -- -D warnings
+
+      - name: Clippy (relais-core, audit feature)
+        run: cargo clippy -p relais-core --features audit --all-targets -- -D warnings
+
+      - name: Test (default workspace)
+        run: cargo test --workspace
+
+      - name: Test (audit feature)
+        run: cargo test -p relais-core --features audit

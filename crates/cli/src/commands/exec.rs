@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use relais_core::types::{Credentials, ExecContext};
 use serde_json::Value;
 
-use super::{build_router, open_vault};
+use super::{build_exec_router, open_vault};
 
 pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
     let parts: Vec<&str> = path.splitn(3, '.').collect();
@@ -60,10 +60,7 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
         }
     }
 
-    let router = build_router();
-    let adapter = router
-        .get(site_id)
-        .ok_or_else(|| anyhow::anyhow!("site '{site_id}' not found"))?;
+    let router = build_exec_router()?;
 
     let ctx = ExecContext {
         site: site_id.to_string(),
@@ -73,7 +70,8 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
         credentials,
     };
 
-    let response = adapter.exec(&ctx).await?;
+    // Route through the gateway choke point (auditing covers this path when enabled).
+    let response = router.exec(&ctx).await?;
     let json = serde_json::to_string_pretty(&response)?;
     println!("{json}");
     Ok(())

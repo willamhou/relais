@@ -58,6 +58,7 @@ impl HackerNewsAdapter {
                 }),
                 rate_limit: None,
                 cached: false,
+                receipt: None,
             },
         })
     }
@@ -174,6 +175,7 @@ impl Adapter for HackerNewsAdapter {
                         pagination: None,
                         rate_limit: None,
                         cached: false,
+                        receipt: None,
                     },
                 })
             }
@@ -213,6 +215,7 @@ impl Adapter for HackerNewsAdapter {
                         }),
                         rate_limit: None,
                         cached: false,
+                        receipt: None,
                     },
                 })
             }

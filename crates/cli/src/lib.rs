@@ -50,6 +50,41 @@ pub enum Commands {
         #[command(subcommand)]
         action: AuthAction,
     },
+    /// Cryptographic call auditing (signet): keys, verification, log tail
+    Audit {
+        #[command(subcommand)]
+        action: AuditAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AuditAction {
+    /// Generate (or load) the gateway signing key and print its public key
+    Init {
+        /// Owner recorded in receipts (defaults to RELAIS_AUDIT_OWNER, then "relais")
+        #[arg(long)]
+        owner: Option<String>,
+    },
+    /// Print the gateway public key (`ed25519:<base64>`)
+    Pubkey,
+    /// Verify the audit chain against the trusted-key anchor (fail-closed)
+    Verify {
+        /// Expected chain head (record_hash) retained out-of-band; detects tail truncation
+        #[arg(long)]
+        head: Option<String>,
+    },
+    /// List recent audit records
+    Tail {
+        /// Only records for this site (matches the `site.` tool prefix)
+        #[arg(long)]
+        site: Option<String>,
+        /// Only records at or after this RFC 3339 timestamp
+        #[arg(long)]
+        since: Option<String>,
+        /// Maximum number of records to show
+        #[arg(long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand)]

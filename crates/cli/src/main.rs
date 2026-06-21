@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Vault { action } => relais_cli::commands::vault::run(&action)?,
         Commands::Auth { action } => relais_cli::commands::auth::run(action).await?,
+        Commands::Audit { action } => relais_cli::commands::audit::run(action).await?,
     }
 
     Ok(())

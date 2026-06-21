@@ -6,6 +6,11 @@ license.workspace = true
 description = "HTTP server (axum) exposing the relais API gateway over /v1/exec."
 repository.workspace = true
 
+[features]
+default = []
+# Propagate cryptographic call auditing to relais-core.
+audit = ["relais-core/audit"]
+
 [dependencies]
 relais-core.workspace = true
 serde.workspace = true

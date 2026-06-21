@@ -4,10 +4,10 @@ use anyhow::Result;
 use relais_server::state::SharedState;
 use tokio::net::TcpListener;
 
-use super::{build_router, open_vault};
+use super::{build_exec_router, open_vault};
 
 pub async fn run(port: u16, jwt_secret: String) -> Result<()> {
-    let router = build_router();
+    let router = build_exec_router()?;
 
     // Open vault if available; don't fail if vault is inaccessible.
     let vault = open_vault().ok();

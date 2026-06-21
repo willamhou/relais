@@ -140,6 +140,7 @@ impl Adapter for ScsAdapter {
                 pagination,
                 rate_limit: None,
                 cached: false,
+                receipt: None,
             },
         })
     }

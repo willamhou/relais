@@ -97,15 +97,14 @@ pub async fn exec_action(
     State(state): State<AppState>,
     Json(body): Json<ExecRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    let adapter = state
-        .router
-        .get(&body.site)
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": format!("site '{}' not found", body.site)})),
-            )
-        })?;
+    // Existence check for a clean 404 (router.exec would otherwise map a missing
+    // site to a 500). The actual execution goes through the router choke point.
+    if state.router.get(&body.site).is_none() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": format!("site '{}' not found", body.site)})),
+        ));
+    }
 
     // Look up credentials from vault for this site.
     let credentials = state.vault.as_ref().and_then(|vault| {
@@ -162,7 +161,7 @@ pub async fn exec_action(
         credentials,
     };
 
-    match adapter.exec(&ctx).await {
+    match state.router.exec(&ctx).await {
         Ok(response) => Ok(Json(response)),
         Err(err) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,

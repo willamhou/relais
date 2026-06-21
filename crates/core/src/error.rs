@@ -10,6 +10,10 @@ pub enum AdapterError {
     NotFound(String),
     #[error("action not supported: {0}")]
     Unsupported(String),
+    #[error("site not found: {0}")]
+    SiteNotFound(String),
+    #[error("audit unavailable: {0}")]
+    AuditUnavailable(String),
     #[error("upstream error: {0}")]
     Upstream(#[from] reqwest::Error),
     #[error("{0}")]
