@@ -52,6 +52,7 @@ impl Adapter for MockAdapter {
                 pagination: None,
                 rate_limit: None,
                 cached: false,
+                receipt: None,
             },
         })
     }

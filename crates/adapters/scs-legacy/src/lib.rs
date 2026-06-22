@@ -174,6 +174,7 @@ impl Adapter for ScsLegacyAdapter {
                 pagination: None,
                 rate_limit: None,
                 cached: false,
+                receipt: None,
             },
         })
     }

@@ -58,11 +58,29 @@ pub struct Response {
     pub meta: ResponseMeta,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResponseMeta {
     pub pagination: Option<PaginationInfo>,
     pub rate_limit: Option<RateLimit>,
     pub cached: bool,
+    /// Cryptographic audit-receipt handle for this call, when the `audit` feature is
+    /// enabled and a sink is configured. Always present in the wire type (only its
+    /// population is feature-gated), so audit and non-audit builds stay compatible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<ReceiptHandle>,
+}
+
+/// A reference to a signed, hash-chained audit receipt produced for one `exec`.
+///
+/// `record_hash` is `Some` in response-closed mode, where the caller awaits the chain
+/// append. In the default response-open mode the caller does not await, so no handle
+/// is attached at all (`ResponseMeta.receipt == None`); `record_hash: None` only
+/// arises if open mode is configured to wait long enough to learn the receipt id.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceiptHandle {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

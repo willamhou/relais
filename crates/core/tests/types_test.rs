@@ -56,6 +56,7 @@ fn response_meta_includes_pagination() {
                 reset_at: chrono::Utc::now(),
             }),
             cached: false,
+            receipt: None,
         },
     };
     assert!(response.meta.pagination.as_ref().unwrap().has_next);

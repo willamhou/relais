@@ -146,6 +146,7 @@ impl Adapter for LlmFallbackAdapter {
                         pagination: None,
                         rate_limit: None,
                         cached: false,
+                        receipt: None,
                     },
                 })
             }

@@ -6,6 +6,11 @@ license.workspace = true
 description = "Command-line interface for the relais API gateway (installs the `relais` binary)."
 repository.workspace = true
 
+[features]
+default = []
+# Enables cryptographic call auditing (signet) and the `relais audit` commands.
+audit = ["relais-core/audit", "relais-server/audit"]
+
 [lib]
 name = "relais_cli"
 path = "src/lib.rs"
