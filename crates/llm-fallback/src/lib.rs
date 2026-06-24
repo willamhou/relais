@@ -126,13 +126,18 @@ impl Adapter for LlmFallbackAdapter {
 
                 debug!(url, action, "LLM fallback: fetching and extracting");
 
-                // Extract cookies from credentials if present.
-                let cookies = ctx.credentials.as_ref().and_then(|cred| match &cred.data {
-                    CredentialData::Cookie { cookies, .. } => Some(cookies),
+                // Extract cookies (with their domain, for host-scoped sending) if present.
+                let cookie_scope = ctx.credentials.as_ref().and_then(|cred| match &cred.data {
+                    CredentialData::Cookie {
+                        cookies, domain, ..
+                    } => Some(crate::browser::CookieScope {
+                        domain: domain.clone(),
+                        cookies: cookies.clone(),
+                    }),
                     _ => None,
                 });
 
-                let html = fetch_html(url, cookies).await.map_err(|e| {
+                let html = fetch_html(url, cookie_scope.as_ref()).await.map_err(|e| {
                     AdapterError::Other(anyhow::anyhow!("failed to fetch HTML: {e}"))
                 })?;
 

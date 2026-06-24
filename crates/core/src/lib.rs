@@ -2,6 +2,7 @@ pub mod adapter;
 #[cfg(feature = "audit")]
 pub mod audit;
 pub mod error;
+pub mod net_guard;
 pub mod oauth;
 pub mod redact;
 pub mod router;
