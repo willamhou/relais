@@ -23,9 +23,15 @@ pub async fn run(action: AuthAction) -> Result<()> {
             token_url,
             client_id,
             client_secret,
+            client_secret_file,
             site,
             scopes,
         } => {
+            let client_secret = super::read_secret(
+                client_secret,
+                client_secret_file.as_deref(),
+                "OAuth client secret",
+            )?;
             let scope_list: Vec<String> = scopes
                 .split(',')
                 .map(|s| s.trim().to_string())
@@ -45,7 +51,11 @@ pub async fn run(action: AuthAction) -> Result<()> {
             site,
             domain,
             cookies,
-        } => import_cookies(&site, &domain, &cookies),
+            cookies_file,
+        } => {
+            let cookies = super::read_secret(cookies, cookies_file.as_deref(), "cookies")?;
+            import_cookies(&site, &domain, &cookies)
+        }
     }
 }
 

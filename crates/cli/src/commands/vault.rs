@@ -7,8 +7,13 @@ pub fn run(action: &VaultAction) -> Result<()> {
     let vault = open_vault()?;
 
     match action {
-        VaultAction::Store { site, token } => {
-            vault.store(site, token)?;
+        VaultAction::Store {
+            site,
+            token,
+            token_file,
+        } => {
+            let token = super::read_secret(token.clone(), token_file.as_deref(), "vault token")?;
+            vault.store(site, &token)?;
             println!("Stored credential for '{site}'");
         }
         VaultAction::List => {

@@ -9,6 +9,43 @@ pub mod vault;
 
 use relais_core::router::Router;
 
+/// Resolve a secret value from an explicit (deprecated) CLI arg, a file, or stdin —
+/// so secrets need not appear in shell history / process listings (M5).
+pub fn read_secret(
+    value: Option<String>,
+    file: Option<&str>,
+    what: &str,
+) -> anyhow::Result<String> {
+    use std::io::{IsTerminal, Read};
+    if let Some(v) = value {
+        tracing::warn!(
+            "{what} was passed on the command line — it is exposed in shell history and process \
+             listings; prefer the matching --*-file flag or piping it on stdin"
+        );
+        return Ok(v);
+    }
+    if let Some(path) = file {
+        let s = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("reading {what} from {path}: {e}"))?;
+        return Ok(s.trim_end_matches(['\n', '\r']).to_string());
+    }
+    // Avoid hanging on an interactive terminal with no piped input.
+    if std::io::stdin().is_terminal() {
+        anyhow::bail!(
+            "no {what} provided: pass it as an argument, a --*-file flag, or pipe it on stdin"
+        );
+    }
+    let mut s = String::new();
+    std::io::stdin()
+        .read_to_string(&mut s)
+        .map_err(|e| anyhow::anyhow!("reading {what} from stdin: {e}"))?;
+    let s = s.trim_end_matches(['\n', '\r']).to_string();
+    if s.is_empty() {
+        anyhow::bail!("no {what} provided (pass it as an argument, a --*-file flag, or via stdin)");
+    }
+    Ok(s)
+}
+
 /// Resolve the audit signing-key passphrase (M6). Encrypted at rest by default via
 /// `RELAIS_AUDIT_PASSPHRASE`; an unencrypted key is allowed only under
 /// `RELAIS_AUDIT_ALLOW_UNENCRYPTED_KEY=1|true` (dev).

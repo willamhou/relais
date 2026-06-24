@@ -17,8 +17,9 @@ pub fn run(path: &str) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("site '{site_id}' not found"))?;
 
     let resources = adapter.resources();
-    let action = find_action(&resources, resource_id, action_id)
-        .ok_or_else(|| anyhow::anyhow!("action '{resource_id}.{action_id}' not found in site '{site_id}'"))?;
+    let action = find_action(&resources, resource_id, action_id).ok_or_else(|| {
+        anyhow::anyhow!("action '{resource_id}.{action_id}' not found in site '{site_id}'")
+    })?;
 
     let json = serde_json::to_string_pretty(&action)?;
     println!("{json}");
