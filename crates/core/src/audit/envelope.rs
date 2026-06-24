@@ -84,12 +84,22 @@ pub fn build_action(
         params: request,
         params_hash: String::new(),
         target: base_url.to_string(),
-        transport: "https".to_string(),
+        transport: scheme_of(base_url).to_string(),
         session,
         call_id: Some(call_id),
         response_hash: None,
         trace_id: Some(trace_id),
         parent_receipt_id: None,
+    }
+}
+
+/// The transport scheme of `base_url` (`https`/`http`), so the receipt reflects the
+/// real transport security rather than always claiming https (M4).
+fn scheme_of(base_url: &str) -> &'static str {
+    if base_url.to_ascii_lowercase().starts_with("https://") {
+        "https"
+    } else {
+        "http"
     }
 }
 
@@ -171,6 +181,31 @@ mod tests {
         assert_eq!(a.trace_id.as_deref(), Some("trace"));
         assert!(a.parent_receipt_id.is_none());
         assert!(a.params_hash.is_empty());
+    }
+
+    #[test]
+    fn transport_reflects_base_url_scheme() {
+        let r = Redactor::new();
+        let ctx = ctx_with_token("t");
+        let req = build_request(&ctx, &meta(), &r, &[]);
+        let http = build_action(
+            &ctx,
+            req.clone(),
+            "http://h:8501",
+            None,
+            "t".into(),
+            "c".into(),
+        );
+        assert_eq!(http.transport, "http");
+        let https = build_action(
+            &ctx,
+            req,
+            "https://api.example",
+            None,
+            "t".into(),
+            "c".into(),
+        );
+        assert_eq!(https.transport, "https");
     }
 
     #[test]
