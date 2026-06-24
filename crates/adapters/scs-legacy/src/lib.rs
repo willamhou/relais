@@ -76,7 +76,7 @@ impl ScsLegacyAdapter {
             );
         }
         Self {
-            client: Client::new(),
+            client: relais_core::http::client(relais_core::http::Profile::Default),
             base_url,
         }
     }

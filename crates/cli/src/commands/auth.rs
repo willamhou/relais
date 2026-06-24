@@ -144,7 +144,7 @@ async fn run_oauth_flow(config: &OAuthConfig, site_id: &str) -> Result<()> {
     };
 
     // 6. Exchange code for tokens.
-    let client = reqwest::Client::new();
+    let client = relais_core::http::client(relais_core::http::Profile::Default);
     let token_response = client
         .post(&config.token_url)
         .header("Accept", "application/json")
