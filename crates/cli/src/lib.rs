@@ -33,11 +33,14 @@ pub enum Commands {
     },
     /// Start the HTTP API server
     Serve {
+        /// Host/interface to bind. Defaults to loopback; set 0.0.0.0 to expose.
+        #[arg(long, env = "RELAIS_HOST", default_value = "127.0.0.1")]
+        host: String,
         /// Port to listen on
         #[arg(long, default_value = "3000")]
         port: u16,
-        /// JWT secret
-        #[arg(long, env = "RELAIS_JWT_SECRET", default_value = "dev-secret")]
+        /// JWT secret (required; no insecure default). Use ≥32 chars.
+        #[arg(long, env = "RELAIS_JWT_SECRET")]
         jwt_secret: String,
     },
     /// Manage credential vault

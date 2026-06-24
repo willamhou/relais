@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::state::AppState;
@@ -34,7 +34,11 @@ pub async fn require_jwt(
         _ => return Err(StatusCode::UNAUTHORIZED),
     };
 
-    let validation = Validation::default();
+    // Pin the algorithm explicitly to HS256 (don't rely on the library default), so
+    // alg-confusion / `none` tokens are rejected even if defaults change. `exp` stays
+    // validated; make the clock leeway explicit.
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.leeway = 60;
     let key = DecodingKey::from_secret(state.jwt_secret.as_bytes());
 
     match decode::<Claims>(token, &key, &validation) {
