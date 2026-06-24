@@ -106,6 +106,8 @@ pub enum VaultAction {
         /// Site ID to delete
         site: String,
     },
+    /// Re-encrypt all credentials into the current (v1) vault format
+    Migrate,
 }
 
 #[derive(Subcommand)]

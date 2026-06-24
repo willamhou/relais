@@ -79,17 +79,41 @@ pub fn build_exec_router() -> anyhow::Result<Router> {
 
 /// Open the vault from the default location (~/.relais/vault/).
 ///
-/// Reads the master password from `RELAIS_VAULT_PASSWORD` or falls back to a
-/// hard-coded development default.
+/// The master password comes from `RELAIS_VAULT_PASSWORD`. There is no silent
+/// insecure default: if it is unset, opening fails (callers that tolerate a missing
+/// vault use `open_vault().ok()`), unless `RELAIS_ALLOW_DEV_VAULT_PASSWORD=1` enables
+/// the old dev password for local development.
 pub fn open_vault() -> anyhow::Result<relais_core::vault::Vault> {
     let vault_dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?
         .join(".relais")
         .join("vault");
     std::fs::create_dir_all(&vault_dir)?;
-    let password =
-        std::env::var("RELAIS_VAULT_PASSWORD").unwrap_or_else(|_| "relais-dev-password".into());
+    let password = vault_password()?;
     Ok(relais_core::vault::Vault::open(&vault_dir, &password)?)
+}
+
+/// Resolve the vault master password, refusing a silent insecure default (H2).
+fn vault_password() -> anyhow::Result<String> {
+    if let Ok(p) = std::env::var("RELAIS_VAULT_PASSWORD") {
+        if !p.is_empty() {
+            return Ok(p);
+        }
+    }
+    let allow_dev = matches!(
+        std::env::var("RELAIS_ALLOW_DEV_VAULT_PASSWORD").as_deref(),
+        Ok("1") | Ok("true")
+    );
+    if allow_dev {
+        tracing::warn!(
+            "RELAIS_ALLOW_DEV_VAULT_PASSWORD is set — using the insecure default vault password (DEV ONLY)"
+        );
+        return Ok("relais-dev-password".into());
+    }
+    anyhow::bail!(
+        "RELAIS_VAULT_PASSWORD is not set; refusing to open the vault with a default password. \
+         Set a strong RELAIS_VAULT_PASSWORD. For local dev only: RELAIS_ALLOW_DEV_VAULT_PASSWORD=1"
+    )
 }
 
 /// Build a Router with all built-in adapters registered.
