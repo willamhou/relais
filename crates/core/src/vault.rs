@@ -53,8 +53,19 @@ pub enum VaultError {
     Encryption,
     #[error("decryption error")]
     Decryption,
+    #[error("invalid site id (reserved)")]
+    InvalidSite,
     #[error("invalid utf-8")]
     Utf8(#[from] std::string::FromUtf8Error),
+}
+
+/// Reject reserved (NUL-prefixed) site ids so a caller can't collide with internal
+/// keys like [`KDF_MARKER`] (e.g. delete it and defeat the lost-kdf protection).
+fn ensure_site_ok(site_id: &str) -> Result<(), VaultError> {
+    if site_id.as_bytes().first() == Some(&0u8) {
+        return Err(VaultError::InvalidSite);
+    }
+    Ok(())
 }
 
 /// Persisted KDF parameters (`kdf.json`). The salt is not secret.
@@ -131,6 +142,7 @@ impl Vault {
     }
 
     pub fn store(&self, site_id: &str, credential: &str) -> Result<(), VaultError> {
+        ensure_site_ok(site_id)?;
         let nonce_bytes: [u8; V1_NONCE_LEN] = rand::random();
         // Bind the ciphertext to the site id (AAD) so a record can't be copied to a
         // different site and decrypted there.
@@ -156,6 +168,7 @@ impl Vault {
     }
 
     pub fn retrieve(&self, site_id: &str) -> Result<Option<String>, VaultError> {
+        ensure_site_ok(site_id)?;
         let data = match self.db.get(site_id.as_bytes())? {
             Some(d) => d,
             None => return Ok(None),
@@ -189,6 +202,7 @@ impl Vault {
     }
 
     pub fn delete(&self, site_id: &str) -> Result<(), VaultError> {
+        ensure_site_ok(site_id)?;
         self.db.remove(site_id.as_bytes())?;
         self.db.flush()?;
         Ok(())
@@ -386,6 +400,30 @@ mod tests {
         Vault::open(dir.path(), "pw").unwrap(); // creates kdf.json
         fs::write(dir.path().join("kdf.json"), b"{ not json").unwrap();
         assert!(Vault::open(dir.path(), "pw").is_err());
+    }
+
+    #[test]
+    fn reserved_site_ids_are_rejected() {
+        let dir = td();
+        {
+            let v = Vault::open(dir.path(), "pw").unwrap();
+            // a NUL-prefixed site id could collide with the internal KDF marker
+            assert!(matches!(
+                v.store("\0kdf_v1", "x"),
+                Err(VaultError::InvalidSite)
+            ));
+            assert!(matches!(v.delete("\0kdf_v1"), Err(VaultError::InvalidSite)));
+            assert!(matches!(
+                v.retrieve("\0kdf_v1"),
+                Err(VaultError::InvalidSite)
+            ));
+        } // drop the vault → release the sled lock before reopening
+          // the marker survives, so the lost-kdf protection still triggers
+        fs::remove_file(dir.path().join("kdf.json")).unwrap();
+        assert!(matches!(
+            Vault::open(dir.path(), "pw"),
+            Err(VaultError::Kdf(_))
+        ));
     }
 
     #[test]
