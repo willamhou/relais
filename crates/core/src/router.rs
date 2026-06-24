@@ -123,6 +123,7 @@ mod audit_tests {
             mode,
             capacity: 16,
             ack_timeout: Duration::from_secs(5),
+            passphrase: None,
         })
         .unwrap()
     }

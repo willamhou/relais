@@ -78,17 +78,25 @@ impl AuditKey {
 
 /// What an opaque `credential_ref` resolves to, locally. This map is **never**
 /// serialized into a receipt/sidecar and is omitted from exports.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CredBinding {
     pub site: String,
+    /// Non-reversible, salted fingerprint of the credential secrets, so a rotated
+    /// credential gets a *different* opaque ref (L2). Empty when no credential.
+    #[serde(default)]
+    pub cred_fp: String,
 }
 
 /// Persists `kref_… -> CredBinding` at `dir/credential_refs.json`. Minting is
-/// idempotent per binding, so a credential keeps one stable opaque ref.
+/// idempotent per binding, so a given credential keeps one stable opaque ref.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CredRefStore {
     #[serde(skip)]
     path: PathBuf,
+    /// Local-only salt for credential fingerprints (never exported), so a fingerprint
+    /// isn't brute-forceable across hosts.
+    #[serde(default)]
+    salt: Vec<u8>,
     map: HashMap<String, CredBinding>,
 }
 
@@ -104,7 +112,27 @@ impl CredRefStore {
             CredRefStore::default()
         };
         store.path = path;
+        if store.salt.is_empty() {
+            let s: [u8; 16] = rand::random();
+            store.salt = s.to_vec();
+        }
         Ok(store)
+    }
+
+    /// Non-reversible, salted fingerprint of the credential secrets (L2). A rotated
+    /// credential (different secrets) yields a different fingerprint, hence a new ref.
+    pub fn fingerprint(&self, secrets: &[String]) -> String {
+        if secrets.is_empty() {
+            return String::new(); // no credential → empty fingerprint
+        }
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(&self.salt);
+        for s in secrets {
+            h.update(s.as_bytes());
+            h.update([0u8]); // length-independent separator
+        }
+        hex::encode(&h.finalize()[..8]) // 16 hex chars
     }
 
     /// Return the existing opaque ref for `binding`, or mint, persist and return a
@@ -182,11 +210,22 @@ mod tests {
     fn mint_is_idempotent_per_binding_and_persists() {
         let dir = tempfile::tempdir().unwrap();
         let mut store = CredRefStore::load(dir.path()).unwrap();
-        let a1 = store.mint(CredBinding { site: "scs".into() }).unwrap();
-        let a2 = store.mint(CredBinding { site: "scs".into() }).unwrap();
+        let a1 = store
+            .mint(CredBinding {
+                site: "scs".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        let a2 = store
+            .mint(CredBinding {
+                site: "scs".into(),
+                ..Default::default()
+            })
+            .unwrap();
         let b = store
             .mint(CredBinding {
                 site: "github".into(),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(a1, a2, "same binding → same ref");
@@ -197,8 +236,38 @@ mod tests {
         let reloaded = CredRefStore::load(dir.path()).unwrap();
         assert_eq!(
             reloaded.map.get(&a1),
-            Some(&CredBinding { site: "scs".into() })
+            Some(&CredBinding {
+                site: "scs".into(),
+                ..Default::default()
+            })
         );
+    }
+
+    #[test]
+    fn fingerprint_rotates_the_ref() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = CredRefStore::load(dir.path()).unwrap();
+        let fp1 = store.fingerprint(&["tok-v1".into()]);
+        let fp2 = store.fingerprint(&["tok-v2".into()]);
+        assert_ne!(fp1, fp2, "different secrets → different fingerprint");
+        assert_eq!(
+            fp1,
+            store.fingerprint(&["tok-v1".into()]),
+            "stable per secret"
+        );
+        let r1 = store
+            .mint(CredBinding {
+                site: "s".into(),
+                cred_fp: fp1,
+            })
+            .unwrap();
+        let r2 = store
+            .mint(CredBinding {
+                site: "s".into(),
+                cred_fp: fp2,
+            })
+            .unwrap();
+        assert_ne!(r1, r2, "a rotated credential gets a new opaque ref");
     }
 
     #[cfg(unix)]
@@ -207,7 +276,12 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let mut store = CredRefStore::load(dir.path()).unwrap();
-        store.mint(CredBinding { site: "scs".into() }).unwrap();
+        store
+            .mint(CredBinding {
+                site: "scs".into(),
+                ..Default::default()
+            })
+            .unwrap();
         let mode = std::fs::metadata(dir.path().join("credential_refs.json"))
             .unwrap()
             .permissions()

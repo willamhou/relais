@@ -26,7 +26,8 @@ pub async fn run(action: AuditAction) -> Result<()> {
             let owner = owner
                 .or_else(|| std::env::var("RELAIS_AUDIT_OWNER").ok())
                 .unwrap_or_else(|| "relais".into());
-            let key = AuditKey::load_or_init(&dir, &owner, None)
+            let passphrase = super::audit_passphrase()?;
+            let key = AuditKey::load_or_init(&dir, &owner, passphrase.as_deref())
                 .map_err(|e| anyhow::anyhow!(e.to_string()))?;
             println!("audit key ready under {}", dir.join("keys").display());
             println!("owner:  {owner}");
@@ -38,7 +39,8 @@ pub async fn run(action: AuditAction) -> Result<()> {
             Ok(())
         }
         AuditAction::Pubkey => {
-            let key = AuditKey::load_or_init(&dir, "relais", None)
+            let passphrase = super::audit_passphrase()?;
+            let key = AuditKey::load_or_init(&dir, "relais", passphrase.as_deref())
                 .map_err(|e| anyhow::anyhow!(e.to_string()))?;
             println!("{}", key.pubkey);
             Ok(())

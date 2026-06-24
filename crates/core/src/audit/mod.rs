@@ -71,6 +71,9 @@ pub struct AuditConfig {
     pub mode: AuditMode,
     pub capacity: usize,
     pub ack_timeout: Duration,
+    /// Passphrase to encrypt the signing key at rest (Argon2id + XChaCha20-Poly1305).
+    /// `None` stores it unencrypted (dev only) — see M6 / the CLI gate.
+    pub passphrase: Option<String>,
 }
 
 /// The audit sink: owns the single writer task, the opaque credential-ref store and
@@ -87,7 +90,7 @@ impl AuditSink {
     /// Build a sink: load-or-init the gateway key, load the credential-ref store and
     /// spawn the single writer task. Must be called within a tokio runtime.
     pub fn new(cfg: AuditConfig) -> Result<Self, AuditError> {
-        let key = AuditKey::load_or_init(&cfg.dir, &cfg.owner, None)?;
+        let key = AuditKey::load_or_init(&cfg.dir, &cfg.owner, cfg.passphrase.as_deref())?;
         let credrefs = CredRefStore::load(&cfg.dir)?;
         let writer = spawn_writer(cfg.dir.clone(), key, cfg.capacity);
         Ok(Self {
@@ -117,19 +120,22 @@ impl AuditSink {
         t0: DateTime<Utc>,
         t1: DateTime<Utc>,
     ) -> Result<Option<ReceiptHandle>, AuditError> {
+        let secrets = secret_values_of(&ctx.credentials);
+
         // Mint the opaque credential ref in a tight sync scope; never hold the guard
-        // across an await.
+        // across an await. Bind it to a salted fingerprint of the credential so a
+        // rotation produces a new ref (L2).
         let credential_ref = {
             let mut store = self
                 .credrefs
                 .lock()
                 .map_err(|_| AuditError::Io("credential-ref store lock poisoned".into()))?;
+            let cred_fp = store.fingerprint(&secrets);
             store.mint(CredBinding {
                 site: ctx.site.clone(),
+                cred_fp,
             })?
         };
-
-        let secrets = secret_values_of(&ctx.credentials);
         let meta = AuditMeta {
             auth_injection: describe_injection(&ctx.credentials),
             credential_ref,

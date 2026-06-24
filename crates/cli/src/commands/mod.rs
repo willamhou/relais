@@ -9,6 +9,32 @@ pub mod vault;
 
 use relais_core::router::Router;
 
+/// Resolve the audit signing-key passphrase (M6). Encrypted at rest by default via
+/// `RELAIS_AUDIT_PASSPHRASE`; an unencrypted key is allowed only under
+/// `RELAIS_AUDIT_ALLOW_UNENCRYPTED_KEY=1|true` (dev).
+#[cfg(feature = "audit")]
+pub fn audit_passphrase() -> anyhow::Result<Option<String>> {
+    if let Ok(p) = std::env::var("RELAIS_AUDIT_PASSPHRASE") {
+        if !p.is_empty() {
+            return Ok(Some(p));
+        }
+    }
+    let allow_unencrypted = matches!(
+        std::env::var("RELAIS_AUDIT_ALLOW_UNENCRYPTED_KEY").as_deref(),
+        Ok("1") | Ok("true")
+    );
+    if allow_unencrypted {
+        tracing::warn!(
+            "RELAIS_AUDIT_ALLOW_UNENCRYPTED_KEY is set — the audit signing key is stored UNENCRYPTED (DEV ONLY)"
+        );
+        return Ok(None);
+    }
+    anyhow::bail!(
+        "RELAIS_AUDIT_PASSPHRASE is not set; refusing to store the audit signing key unencrypted. \
+         Set a passphrase, or for local dev only: RELAIS_AUDIT_ALLOW_UNENCRYPTED_KEY=1"
+    )
+}
+
 /// The signet/audit directory: `RELAIS_SIGNET_DIR` or `~/.relais/signet`.
 #[cfg(feature = "audit")]
 pub fn audit_dir() -> anyhow::Result<std::path::PathBuf> {
@@ -47,12 +73,14 @@ fn attach_audit(router: Router) -> anyhow::Result<Router> {
     };
     let dir = audit_dir()?;
     let owner = std::env::var("RELAIS_AUDIT_OWNER").unwrap_or_else(|_| "relais".into());
+    let passphrase = audit_passphrase()?;
     match AuditSink::new(AuditConfig {
         dir,
         owner,
         mode,
         capacity: 1024,
         ack_timeout: std::time::Duration::from_secs(5),
+        passphrase,
     }) {
         Ok(sink) => Ok(router.with_audit(sink)),
         Err(e) => match mode {
