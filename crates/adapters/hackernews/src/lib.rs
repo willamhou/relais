@@ -9,6 +9,10 @@ use tracing::debug;
 
 const BASE_URL: &str = "https://hacker-news.firebaseio.com/v0";
 const DEFAULT_LIMIT: usize = 30;
+/// Default / hard cap on comments fetched per `comments.list` call, to bound the
+/// upstream fan-out (one request must not spawn thousands of fetches).
+const DEFAULT_COMMENT_LIMIT: usize = 50;
+const MAX_COMMENT_LIMIT: usize = 200;
 
 pub struct HackerNewsAdapter {
     client: Client,
@@ -33,7 +37,11 @@ impl HackerNewsAdapter {
         Ok(body)
     }
 
-    async fn fetch_story_ids(&self, endpoint: &str, limit: usize) -> Result<Response, AdapterError> {
+    async fn fetch_story_ids(
+        &self,
+        endpoint: &str,
+        limit: usize,
+    ) -> Result<Response, AdapterError> {
         let url = format!("{}/{}.json", BASE_URL, endpoint);
         let ids = self.fetch_json(&url).await?;
 
@@ -100,9 +108,15 @@ impl Adapter for HackerNewsAdapter {
                 id: "list".into(),
                 method: Method::Read,
                 description: "List comments for a story".into(),
-                params: json!({"story_id": "integer"}),
+                params: json!({
+                    "story_id": "integer",
+                    "limit": format!("integer (optional, default {DEFAULT_COMMENT_LIMIT}, max {MAX_COMMENT_LIMIT})"),
+                }),
                 returns: json!({"type": "array", "items": "comment"}),
-                pagination: offset_pagination.clone(),
+                // comments are capped tighter than stories to bound fan-out.
+                pagination: Some(PaginationStyle::Offset {
+                    max_limit: MAX_COMMENT_LIMIT as u32,
+                }),
             }],
             children: vec![],
         };
@@ -186,13 +200,19 @@ impl Adapter for HackerNewsAdapter {
 
                 let story = self.fetch_item(story_id).await?;
 
-                let kid_ids = story["kids"]
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default();
+                let all_kids = story["kids"].as_array().cloned().unwrap_or_default();
+                let total_kids = all_kids.len();
 
-                let mut comments = Vec::with_capacity(kid_ids.len());
-                for kid_value in &kid_ids {
+                // Cap the fan-out: one request must not spawn thousands of upstream
+                // fetches. `limit` (default 50, hard max 200) bounds it.
+                let limit = ctx.params["limit"]
+                    .as_u64()
+                    .map(|n| n as usize)
+                    .unwrap_or(DEFAULT_COMMENT_LIMIT)
+                    .clamp(1, MAX_COMMENT_LIMIT);
+
+                let mut comments = Vec::with_capacity(limit.min(total_kids));
+                for kid_value in all_kids.into_iter().take(limit) {
                     if let Some(kid_id) = kid_value.as_u64() {
                         match self.fetch_item(kid_id).await {
                             Ok(comment) => comments.push(comment),
@@ -209,7 +229,7 @@ impl Adapter for HackerNewsAdapter {
                     data: Value::Array(comments),
                     meta: ResponseMeta {
                         pagination: Some(relais_core::PaginationInfo {
-                            has_next: false,
+                            has_next: total_kids > limit,
                             cursor: None,
                             total: Some(total),
                         }),

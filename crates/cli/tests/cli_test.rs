@@ -105,9 +105,14 @@ fn cli_parses_vault_store() {
     let cli = Cli::parse_from(["relais", "vault", "store", "github", "ghp_abc123"]);
     match cli.command {
         Commands::Vault { action } => match action {
-            VaultAction::Store { site, token } => {
+            VaultAction::Store {
+                site,
+                token,
+                token_file,
+            } => {
                 assert_eq!(site, "github");
-                assert_eq!(token, "ghp_abc123");
+                assert_eq!(token.as_deref(), Some("ghp_abc123"));
+                assert_eq!(token_file, None);
             }
             _ => panic!("expected Store action"),
         },
@@ -189,13 +194,15 @@ fn cli_parses_auth_custom() {
                 token_url,
                 client_id,
                 client_secret,
+                client_secret_file,
                 site,
                 scopes,
             } => {
                 assert_eq!(auth_url, "https://example.com/auth");
                 assert_eq!(token_url, "https://example.com/token");
                 assert_eq!(client_id, "myid");
-                assert_eq!(client_secret, "mysecret");
+                assert_eq!(client_secret.as_deref(), Some("mysecret"));
+                assert_eq!(client_secret_file, None);
                 assert_eq!(site, "example");
                 assert_eq!(scopes, "");
             }
@@ -253,10 +260,12 @@ fn cli_parses_auth_import_cookies() {
                 site,
                 domain,
                 cookies,
+                cookies_file,
             } => {
                 assert_eq!(site, "example");
                 assert_eq!(domain, "example.com");
-                assert_eq!(cookies, "session=abc; token=xyz");
+                assert_eq!(cookies.as_deref(), Some("session=abc; token=xyz"));
+                assert_eq!(cookies_file, None);
             }
             _ => panic!("expected ImportCookies action"),
         },

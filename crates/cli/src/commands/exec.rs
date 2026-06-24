@@ -22,14 +22,11 @@ pub async fn run(path: &str, data: Option<&str>) -> Result<()> {
     // If the vault is unavailable or no credential is found, proceed without credentials.
     let vault = open_vault().ok();
     let credentials = vault.as_ref().and_then(|v| {
-        v.retrieve(site_id)
-            .ok()
-            .flatten()
-            .and_then(|json_str| {
-                serde_json::from_str::<Credentials>(&json_str)
-                    .ok()
-                    .or_else(|| Some(Credentials::api_key(&json_str)))
-            })
+        v.retrieve(site_id).ok().flatten().and_then(|json_str| {
+            serde_json::from_str::<Credentials>(&json_str)
+                .ok()
+                .or_else(|| Some(Credentials::api_key(&json_str)))
+        })
     });
 
     // If the token is expired, try to refresh it automatically.

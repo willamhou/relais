@@ -96,8 +96,11 @@ pub enum VaultAction {
     Store {
         /// Site ID (e.g., "github")
         site: String,
-        /// The credential token to store
-        token: String,
+        /// The token (DEPRECATED: exposed in shell history; prefer --token-file or stdin)
+        token: Option<String>,
+        /// Read the token from a file
+        #[arg(long)]
+        token_file: Option<String>,
     },
     /// List stored credentials
     List,
@@ -128,9 +131,12 @@ pub enum AuthAction {
         /// Client ID
         #[arg(long)]
         client_id: String,
-        /// Client secret
+        /// Client secret (DEPRECATED on CLI; prefer --client-secret-file or stdin)
         #[arg(long)]
-        client_secret: String,
+        client_secret: Option<String>,
+        /// Read the client secret from a file
+        #[arg(long)]
+        client_secret_file: Option<String>,
         /// Site ID to store credential under
         #[arg(long)]
         site: String,
@@ -145,8 +151,11 @@ pub enum AuthAction {
         /// Domain the cookies belong to
         #[arg(long)]
         domain: String,
-        /// Cookie string (name=value pairs, semicolon-separated)
+        /// Cookie string (DEPRECATED on CLI; prefer --cookies-file or stdin)
         #[arg(long)]
-        cookies: String,
+        cookies: Option<String>,
+        /// Read the cookie string from a file
+        #[arg(long)]
+        cookies_file: Option<String>,
     },
 }
