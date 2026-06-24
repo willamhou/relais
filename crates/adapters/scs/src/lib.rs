@@ -37,7 +37,7 @@ impl ScsAdapter {
     pub fn with_base_url(base_url: impl Into<String>) -> Self {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         Self {
-            client: Client::new(),
+            client: relais_core::http::client(relais_core::http::Profile::Default),
             base_url,
         }
     }

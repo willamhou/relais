@@ -53,7 +53,7 @@ pub async fn maybe_refresh(
         .ok_or_else(|| RefreshError::NoProviderConfig(site_id.to_string()))?;
 
     // Exchange the refresh token for a new access token.
-    let client = reqwest::Client::new();
+    let client = crate::http::client(crate::http::Profile::Default);
     let response = client
         .post(&config.token_url)
         .header("Accept", "application/json")

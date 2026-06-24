@@ -14,7 +14,7 @@ impl AnthropicClient {
         Self {
             api_key,
             model,
-            client: reqwest::Client::new(),
+            client: relais_core::http::client(relais_core::http::Profile::Llm),
         }
     }
 }

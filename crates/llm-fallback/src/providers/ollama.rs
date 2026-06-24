@@ -22,7 +22,7 @@ impl OllamaClient {
         Self {
             base_url,
             model,
-            client: reqwest::Client::new(),
+            client: relais_core::http::client(relais_core::http::Profile::Llm),
         }
     }
 }

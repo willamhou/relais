@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use relais_core::net_guard;
 use tracing::debug;
 
 use crate::LlmError;
+
+/// Hard cap on a fetched body, to bound memory against a hostile/huge response.
+const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
 /// Cookies plus the domain they were captured for, so they are only ever sent to a
 /// matching host.
@@ -76,7 +80,28 @@ pub async fn fetch_html(url: &str, cookie_scope: Option<&CookieScope>) -> Result
         return Err(LlmError::Browser(format!("HTTP {}", resp.status())));
     }
 
-    Ok(resp.text().await?)
+    // Reject an oversized declared body up front.
+    if let Some(len) = resp.content_length() {
+        if len > MAX_BODY_BYTES as u64 {
+            return Err(LlmError::Browser(format!(
+                "response too large: {len} bytes (cap {MAX_BODY_BYTES})"
+            )));
+        }
+    }
+
+    // Stream with a running byte cap so a chunked/undeclared body can't exhaust memory.
+    let mut buf: Vec<u8> = Vec::new();
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        let remaining = MAX_BODY_BYTES.saturating_sub(buf.len());
+        if chunk.len() >= remaining {
+            buf.extend_from_slice(&chunk[..remaining]);
+            break; // hit the cap; truncate
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 /// Whether `host` is on `RELAIS_FALLBACK_ALLOW` (comma-separated). Unset/empty ⇒

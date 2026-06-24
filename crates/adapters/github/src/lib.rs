@@ -16,7 +16,7 @@ pub struct GitHubAdapter {
 impl GitHubAdapter {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            client: relais_core::http::client(relais_core::http::Profile::Default),
         }
     }
 }
