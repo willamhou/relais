@@ -3,6 +3,7 @@ pub mod adapter;
 pub mod audit;
 pub mod error;
 pub mod oauth;
+pub mod redact;
 pub mod router;
 pub mod token_refresh;
 pub mod types;
