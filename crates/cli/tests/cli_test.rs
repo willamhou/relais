@@ -116,6 +116,17 @@ fn cli_parses_vault_store() {
 }
 
 #[test]
+fn cli_parses_vault_migrate() {
+    let cli = Cli::parse_from(["relais", "vault", "migrate"]);
+    assert!(matches!(
+        cli.command,
+        Commands::Vault {
+            action: VaultAction::Migrate
+        }
+    ));
+}
+
+#[test]
 fn cli_parses_vault_list() {
     let cli = Cli::parse_from(["relais", "vault", "list"]);
     match cli.command {

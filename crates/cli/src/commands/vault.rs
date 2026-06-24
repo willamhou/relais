@@ -24,6 +24,10 @@ pub fn run(action: &VaultAction) -> Result<()> {
             vault.delete(site)?;
             println!("Deleted credential for '{site}'");
         }
+        VaultAction::Migrate => {
+            let n = vault.migrate()?;
+            println!("Re-encrypted {n} credential(s) into the current vault format.");
+        }
     }
 
     Ok(())
