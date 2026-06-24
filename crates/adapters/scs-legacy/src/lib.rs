@@ -69,6 +69,12 @@ impl ScsLegacyAdapter {
     /// Construct an adapter with an explicit base URL (no env lookup).
     pub fn with_base_url(base_url: impl Into<String>) -> Self {
         let base_url = base_url.into().trim_end_matches('/').to_string();
+        if check_transport(&base_url, false).is_err() {
+            tracing::warn!(
+                "SCS legacy base_url '{base_url}' is plaintext http to a non-loopback host; \
+                 acs_token requests will be refused unless RELAIS_SCS_ALLOW_INSECURE=1 — prefer https"
+            );
+        }
         Self {
             client: Client::new(),
             base_url,
@@ -118,6 +124,12 @@ impl Adapter for ScsLegacyAdapter {
 
     async fn exec(&self, ctx: &ExecContext) -> Result<Response, AdapterError> {
         let action = lookup(&ctx.resource, &ctx.action)?;
+        // Never send the acs_token over plaintext http to a remote host.
+        let allow_insecure = matches!(
+            std::env::var("RELAIS_SCS_ALLOW_INSECURE").as_deref(),
+            Ok("1") | Ok("true")
+        );
+        check_transport(&self.base_url, allow_insecure).map_err(AdapterError::Unsupported)?;
         let url = build_url(&self.base_url, action);
         let acs_token = ctx.credentials.as_ref().and_then(|c| c.bearer_token());
 
@@ -158,6 +170,12 @@ impl Adapter for ScsLegacyAdapter {
         }
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
+            // Defense-in-depth: if the upstream echoes the token in its error body,
+            // strip it before it can reach logs/audit/callers.
+            let text = match acs_token {
+                Some(t) if !t.is_empty() => text.replace(t, "[REDACTED]"),
+                _ => text,
+            };
             return Err(AdapterError::Other(anyhow::anyhow!(
                 "legacy SCS error {status}: {text}"
             )));
@@ -194,6 +212,45 @@ fn lookup(resource: &str, action: &str) -> Result<&'static ActionDef, AdapterErr
 /// `{base_url}{base_path}{action.path}` — e.g. `http://h:8501` + `/1` + `/accounts/create`.
 fn build_url(base_url: &str, action: &ActionDef) -> String {
     format!("{base_url}{}{}", SPEC.base_path, action.path)
+}
+
+/// Refuse to send the `acs_token` over plaintext http to a non-loopback host — it
+/// leaks through access logs, proxies, and caches (H4). `https` and loopback `http`
+/// are allowed; `allow_insecure` (RELAIS_SCS_ALLOW_INSECURE=1) is an explicit
+/// override for trusted private networks. An unknown scheme is left untouched.
+fn check_transport(base_url: &str, allow_insecure: bool) -> Result<(), String> {
+    // Normalize the scheme to lowercase so `HTTP://` can't bypass the check.
+    let lower = base_url.to_ascii_lowercase();
+    if lower.starts_with("https://") {
+        return Ok(());
+    }
+    let rest = match lower.strip_prefix("http://") {
+        Some(r) => r,
+        None => return Ok(()),
+    };
+    // Extract the host, handling bracketed IPv6 literals (`[::1]:port`), and strip any
+    // `user:pass@` userinfo so it can't smuggle a fake host.
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    let hostport = authority.rsplit('@').next().unwrap_or(authority);
+    let host = if let Some(after) = hostport.strip_prefix('[') {
+        after.split(']').next().unwrap_or("")
+    } else {
+        hostport.split(':').next().unwrap_or("")
+    };
+    // Use real IP parsing for loopback (127.0.0.0/8 and ::1) so a name like
+    // `127.0.0.1.evil.com` (which does NOT parse as an IP) is correctly NOT loopback.
+    let is_loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false);
+    if is_loopback || allow_insecure {
+        return Ok(());
+    }
+    Err(format!(
+        "refusing to send acs_token over plaintext http to non-loopback host '{host}'; \
+         use https or set RELAIS_SCS_ALLOW_INSECURE=1 to override"
+    ))
 }
 
 fn http_to_method(http: &str) -> Method {
@@ -261,6 +318,33 @@ mod tests {
         assert_eq!(SPEC.base_path, "/1");
         let total: usize = SPEC.modules.values().map(|m| m.actions.len()).sum();
         assert!(total >= 1300, "expected ~1324 actions, got {total}");
+    }
+
+    #[test]
+    fn transport_allows_https_and_loopback_http() {
+        assert!(check_transport("https://scs.example.com", false).is_ok());
+        assert!(check_transport("http://127.0.0.1:8501", false).is_ok());
+        assert!(check_transport("http://localhost:8501", false).is_ok());
+        assert!(check_transport("http://[::1]:8501", false).is_ok());
+    }
+
+    #[test]
+    fn transport_blocks_remote_http_unless_override() {
+        assert!(check_transport("http://scs.example.com/1", false).is_err());
+        assert!(check_transport("http://scs.example.com/1", true).is_ok());
+    }
+
+    #[test]
+    fn transport_rejects_loopback_lookalike_and_userinfo() {
+        // a name that merely starts with `127.` is NOT loopback
+        assert!(check_transport("http://127.0.0.1.evil.com/1", false).is_err());
+        // userinfo cannot smuggle a loopback host
+        assert!(check_transport("http://127.0.0.1@evil.com/1", false).is_err());
+        // a real 127.0.0.0/8 address IS loopback
+        assert!(check_transport("http://127.5.5.5:8501", false).is_ok());
+        // case-variant scheme must not bypass the check
+        assert!(check_transport("HTTP://scs.example.com/1", false).is_err());
+        assert!(check_transport("HtTpS://scs.example.com", false).is_ok());
     }
 
     #[test]
