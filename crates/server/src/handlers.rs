@@ -1,10 +1,12 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
+use relais_core::redact::{secret_values_of, Redactor};
 use relais_core::types::{Credentials, ExecContext};
+use relais_core::AdapterError;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -26,10 +28,7 @@ pub async fn list_apis(
     State(state): State<AppState>,
     Path(site): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let adapter = state
-        .router
-        .get(&site)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let adapter = state.router.get(&site).ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(adapter.resources()))
 }
@@ -48,14 +47,10 @@ pub async fn get_spec(
 
     let (site_id, resource_id, action_id) = (parts[0], parts[1], parts[2]);
 
-    let adapter = state
-        .router
-        .get(site_id)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let adapter = state.router.get(site_id).ok_or(StatusCode::NOT_FOUND)?;
 
     let resources = adapter.resources();
-    let action = find_action(&resources, resource_id, action_id)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let action = find_action(&resources, resource_id, action_id).ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(action))
 }
@@ -93,17 +88,11 @@ pub struct ExecRequest {
 }
 
 /// POST /v1/exec — execute an action via the router.
-pub async fn exec_action(
-    State(state): State<AppState>,
-    Json(body): Json<ExecRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+pub async fn exec_action(State(state): State<AppState>, Json(body): Json<ExecRequest>) -> Response {
     // Existence check for a clean 404 (router.exec would otherwise map a missing
-    // site to a 500). The actual execution goes through the router choke point.
+    // site to a 500). Use the same structured error shape as every other error.
     if state.router.get(&body.site).is_none() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": format!("site '{}' not found", body.site)})),
-        ));
+        return error_response(&AdapterError::SiteNotFound(body.site.clone()), &None);
     }
 
     // Look up credentials from vault for this site.
@@ -122,12 +111,8 @@ pub async fn exec_action(
     // If the token is expired, try to refresh it automatically.
     let credentials = if let Some(cred) = credentials {
         if cred.is_expired() {
-            match relais_core::token_refresh::maybe_refresh(
-                &cred,
-                &body.site,
-                state.vault.as_ref(),
-            )
-            .await
+            match relais_core::token_refresh::maybe_refresh(&cred, &body.site, state.vault.as_ref())
+                .await
             {
                 Ok(refreshed) => Some(refreshed),
                 Err(e) => {
@@ -162,10 +147,111 @@ pub async fn exec_action(
     };
 
     match state.router.exec(&ctx).await {
-        Ok(response) => Ok(Json(response)),
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": err.to_string()})),
-        )),
+        Ok(response) => Json(response).into_response(),
+        Err(err) => error_response(&err, &ctx.credentials),
+    }
+}
+
+/// Map an adapter error to (HTTP status, stable `kind`).
+fn classify(err: &AdapterError) -> (StatusCode, &'static str) {
+    match err {
+        AdapterError::Auth(_) => (StatusCode::UNAUTHORIZED, "auth"),
+        AdapterError::RateLimited { .. } => (StatusCode::TOO_MANY_REQUESTS, "rate_limited"),
+        AdapterError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
+        AdapterError::Unsupported(_) => (StatusCode::BAD_REQUEST, "unsupported"),
+        AdapterError::SiteNotFound(_) => (StatusCode::NOT_FOUND, "site_not_found"),
+        AdapterError::AuditUnavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, "audit_unavailable"),
+        AdapterError::Upstream(_) => (StatusCode::BAD_GATEWAY, "upstream"),
+        AdapterError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
+    }
+}
+
+/// The error text with this request's credential values masked. Upstream error text
+/// can echo a request credential, so it must not be returned to the caller verbatim
+/// (the audit redaction boundary must not be bypassed on the error path).
+fn redacted_message(err: &AdapterError, credentials: &Option<Credentials>) -> String {
+    Redactor::new().redact_str(&err.to_string(), &secret_values_of(credentials))
+}
+
+/// Build a safe HTTP response for an adapter error: proper status, a structured
+/// redacted body, and a `Retry-After` header for rate limits.
+fn error_response(err: &AdapterError, credentials: &Option<Credentials>) -> Response {
+    let (status, kind) = classify(err);
+    let message = redacted_message(err, credentials);
+    let body = Json(json!({ "error": { "kind": kind, "message": message } }));
+    let mut resp = (status, body).into_response();
+    if let AdapterError::RateLimited { retry_after_secs } = err {
+        if let Ok(v) = HeaderValue::from_str(&retry_after_secs.to_string()) {
+            resp.headers_mut().insert(header::RETRY_AFTER, v);
+        }
+    }
+    resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_request_credential_in_error_message() {
+        // An error whose text echoes the request's API token must be masked.
+        let creds = Some(Credentials::api_key("SECRET_TOKEN_abc"));
+        let err = AdapterError::Auth("upstream said: token SECRET_TOKEN_abc bad".into());
+        let msg = redacted_message(&err, &creds);
+        assert!(!msg.contains("SECRET_TOKEN_abc"), "token leaked: {msg}");
+    }
+
+    #[test]
+    fn maps_known_variants_to_statuses() {
+        let cases = [
+            (
+                AdapterError::Auth("x".into()),
+                StatusCode::UNAUTHORIZED,
+                "auth",
+            ),
+            (
+                AdapterError::NotFound("x".into()),
+                StatusCode::NOT_FOUND,
+                "not_found",
+            ),
+            (
+                AdapterError::Unsupported("x".into()),
+                StatusCode::BAD_REQUEST,
+                "unsupported",
+            ),
+            (
+                AdapterError::RateLimited {
+                    retry_after_secs: 1,
+                },
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limited",
+            ),
+            (
+                AdapterError::SiteNotFound("x".into()),
+                StatusCode::NOT_FOUND,
+                "site_not_found",
+            ),
+        ];
+        for (err, status, kind) in cases {
+            let (got_status, got_kind) = classify(&err);
+            assert_eq!(got_status, status, "status for {err:?}");
+            assert_eq!(got_kind, kind, "kind for {err:?}");
+        }
+    }
+
+    #[test]
+    fn rate_limited_sets_retry_after_header() {
+        let resp = error_response(
+            &AdapterError::RateLimited {
+                retry_after_secs: 42,
+            },
+            &None,
+        );
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            resp.headers().get(header::RETRY_AFTER).unwrap(),
+            "42",
+            "Retry-After header"
+        );
     }
 }
