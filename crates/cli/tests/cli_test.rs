@@ -56,22 +56,44 @@ fn cli_parses_exec_command_with_data() {
 }
 
 #[test]
-fn cli_parses_serve_with_defaults() {
-    let cli = Cli::parse_from(["relais", "serve"]);
+fn cli_serve_requires_jwt_secret() {
+    // No insecure default: `serve` without a secret must fail to parse.
+    assert!(Cli::try_parse_from(["relais", "serve"]).is_err());
+}
+
+#[test]
+fn cli_parses_serve_with_secret_defaults() {
+    let secret = "x".repeat(32);
+    let cli = Cli::parse_from(["relais", "serve", "--jwt-secret", secret.as_str()]);
     match cli.command {
-        Commands::Serve { port, jwt_secret } => {
+        Commands::Serve {
+            host,
+            port,
+            jwt_secret,
+        } => {
+            assert_eq!(host, "127.0.0.1");
             assert_eq!(port, 3000);
-            assert_eq!(jwt_secret, "dev-secret");
+            assert_eq!(jwt_secret.len(), 32);
         }
         _ => panic!("expected Serve command"),
     }
 }
 
 #[test]
-fn cli_parses_serve_with_port() {
-    let cli = Cli::parse_from(["relais", "serve", "--port", "8080"]);
+fn cli_parses_serve_with_port_and_host() {
+    let cli = Cli::parse_from([
+        "relais",
+        "serve",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--jwt-secret",
+        "supersecretsupersecretsupersecret",
+    ]);
     match cli.command {
-        Commands::Serve { port, .. } => {
+        Commands::Serve { host, port, .. } => {
+            assert_eq!(host, "0.0.0.0");
             assert_eq!(port, 8080);
         }
         _ => panic!("expected Serve command"),
