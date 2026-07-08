@@ -122,6 +122,8 @@ operate the corresponding site through relais.
 
 - [`skills/scs-legacy`](skills/scs-legacy/SKILL.md) — operate the full SCS (娱集市后台) platform (79 modules) via relais.
 - [`skills/scs-accounts`](skills/scs-accounts/SKILL.md) — manage SCS accounts on the kratos `scs-v2` service via relais.
+- [`skills/scs-customer-onboarding`](skills/scs-customer-onboarding/SKILL.md) — onboard legacy SCS customers, receive addresses, and customer accounts via relais.
+- [`skills/scs-goods-flow`](skills/scs-goods-flow/SKILL.md) — create legacy SCS goods and submit shelf rating forms via relais.
 
 ## License
 

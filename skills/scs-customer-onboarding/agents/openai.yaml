@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCS Customer Onboarding"
+  short_description: "Onboard SCS customers via Relais"
+  default_prompt: "Use $scs-customer-onboarding to onboard a new legacy SCS customer through Relais."

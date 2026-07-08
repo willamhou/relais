@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCS Goods Flow"
+  short_description: "Create and shelf SCS goods via Relais"
+  default_prompt: "Use $scs-goods-flow to create or shelf legacy SCS goods through Relais."
